@@ -65,6 +65,20 @@ It'll open full-screen with its own icon, no browser bar — just like a regular
 talks to Supabase over the internet, you'll want a connection to save new entries, but the app
 shell itself is cached for fast loading.
 
+## Updating an existing install
+
+If you already deployed this app and are now adding the calculator / icons / search /
+theme / budget-assignment / savings features, you only need to do two things:
+
+1. In Supabase → **SQL Editor** → new query → paste the contents of
+   `supabase/migration_002_features.sql` → **Run**. This only adds new columns and a new
+   table — it does not touch or delete any of your existing accounts, transactions, or
+   budgets.
+2. Push the updated code to your GitHub repo (`git add . && git commit -m "Add new
+   features" && git push`). Vercel redeploys automatically within about a minute.
+
+Your login, accounts, and transaction history stay exactly as they were.
+
 ## Notes for daily use
 
 - Every entry you log gets its date and time stamped automatically.

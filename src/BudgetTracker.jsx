@@ -4,9 +4,13 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell,
 } from "recharts";
 import {
-  Plus, Trash2, Pencil, X, ArrowLeftRight, Wallet, Tag as TagIcon,
-  LayoutDashboard, ListOrdered, FolderTree, Target, Check, Landmark,
-  ArrowDownCircle, ArrowUpCircle, LogOut,
+  Plus, Trash2, Pencil, X, ArrowLeftRight, Wallet, LayoutDashboard,
+  ListOrdered, FolderTree, Target, Check, Landmark, ArrowDownCircle,
+  ArrowUpCircle, LogOut, Calculator, Sun, Moon, Search, PiggyBank,
+  ShoppingCart, Utensils, Car, Home, Zap, Heart, Gift, Plane, BookOpen,
+  Gamepad2, Smartphone, Wifi, Coffee, Dumbbell, Baby, PawPrint, Briefcase,
+  GraduationCap, Music, Film, Bus, Fuel, ShoppingBag, Pill, Shirt,
+  Scissors, TreePine, DollarSign, Tag,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
@@ -15,6 +19,18 @@ import { supabase } from "./supabaseClient";
 /* ------------------------------------------------------------------ */
 
 const PALETTE = ["#3E6B4F", "#9A3324", "#55696B", "#C08829", "#4A5FA0", "#7A5C8E", "#B0793E", "#2E7C7A"];
+
+const ICON_MAP = {
+  ShoppingCart, Utensils, Car, Home, Zap, Heart, Gift, Plane, BookOpen,
+  Gamepad2, Smartphone, Wifi, Coffee, Dumbbell, Baby, PawPrint, Briefcase,
+  GraduationCap, Music, Film, Bus, Fuel, ShoppingBag, Pill, Shirt,
+  Scissors, TreePine, DollarSign, Tag,
+};
+const ICON_NAMES = Object.keys(ICON_MAP);
+function CategoryIcon({ name, size = 14, ...rest }) {
+  const Cmp = ICON_MAP[name] || Tag;
+  return <Cmp size={size} {...rest} />;
+}
 
 const fmtMoney = (n) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 2 }).format(
@@ -41,6 +57,46 @@ function startOfPeriod(period, ref = new Date()) {
   return d;
 }
 
+/* Tiny safe expression evaluator for the amount calculator: + - * / ( ) only */
+function safeEval(input) {
+  const tokens = String(input).match(/(\d+\.?\d*|\.\d+|[+\-*/()])/g);
+  if (!tokens || tokens.length === 0) return NaN;
+  let pos = 0;
+  const peek = () => tokens[pos];
+  const next = () => tokens[pos++];
+  function parseExpr() {
+    let val = parseTerm();
+    while (peek() === "+" || peek() === "-") {
+      const op = next();
+      const rhs = parseTerm();
+      val = op === "+" ? val + rhs : val - rhs;
+    }
+    return val;
+  }
+  function parseTerm() {
+    let val = parseFactor();
+    while (peek() === "*" || peek() === "/") {
+      const op = next();
+      const rhs = parseFactor();
+      val = op === "*" ? val * rhs : val / rhs;
+    }
+    return val;
+  }
+  function parseFactor() {
+    if (peek() === "-") { next(); return -parseFactor(); }
+    if (peek() === "(") {
+      next();
+      const val = parseExpr();
+      if (peek() === ")") next();
+      return val;
+    }
+    const t = next();
+    return t === undefined ? NaN : parseFloat(t);
+  }
+  const result = parseExpr();
+  return Number.isFinite(result) ? result : NaN;
+}
+
 /* ------------------------------------------------------------------ */
 /* Row <-> app object mapping (snake_case DB <-> camelCase JS)         */
 /* ------------------------------------------------------------------ */
@@ -48,8 +104,8 @@ function startOfPeriod(period, ref = new Date()) {
 const accountFromRow = (r) => ({ id: r.id, name: r.name, type: r.type, initialBalance: Number(r.initial_balance), color: r.color });
 const accountToRow = (a) => ({ name: a.name, type: a.type, initial_balance: a.initialBalance, color: a.color });
 
-const categoryFromRow = (r) => ({ id: r.id, name: r.name, type: r.type, color: r.color });
-const categoryToRow = (c) => ({ name: c.name, type: c.type, color: c.color });
+const categoryFromRow = (r) => ({ id: r.id, name: r.name, type: r.type, color: r.color, icon: r.icon || "Tag" });
+const categoryToRow = (c) => ({ name: c.name, type: c.type, color: c.color, icon: c.icon || "Tag" });
 
 const txnFromRow = (r) => ({
   id: r.id,
@@ -59,7 +115,7 @@ const txnFromRow = (r) => ({
   fromAccountId: r.from_account_id,
   toAccountId: r.to_account_id,
   categoryId: r.category_id,
-  tags: r.tags || [],
+  budgetId: r.budget_id || null,
   note: r.note || "",
   fee: { enabled: !!r.fee_enabled, amount: Number(r.fee_amount || 0) },
   date: r.occurred_at,
@@ -71,7 +127,7 @@ const txnToRow = (t) => ({
   from_account_id: t.fromAccountId || null,
   to_account_id: t.toAccountId || null,
   category_id: t.categoryId || null,
-  tags: t.tags || [],
+  budget_id: t.budgetId || null,
   note: t.note || "",
   fee_enabled: t.fee?.enabled || false,
   fee_amount: t.fee?.enabled ? t.fee.amount : 0,
@@ -81,8 +137,17 @@ const txnToRow = (t) => ({
 const budgetFromRow = (r) => ({ id: r.id, name: r.name, period: r.period, categoryId: r.category_id || "all", amount: Number(r.amount) });
 const budgetToRow = (b) => ({ name: b.name, period: b.period, category_id: b.categoryId === "all" ? null : b.categoryId, amount: b.amount });
 
+const goalFromRow = (r) => ({
+  id: r.id, name: r.name, targetAmount: Number(r.target_amount), targetDate: r.target_date,
+  accountId: r.account_id, manualSaved: Number(r.manual_saved || 0), color: r.color,
+});
+const goalToRow = (g) => ({
+  name: g.name, target_amount: g.targetAmount, target_date: g.targetDate || null,
+  account_id: g.accountId || null, manual_saved: g.manualSaved ?? 0, color: g.color,
+});
+
 /* ------------------------------------------------------------------ */
-/* Small UI atoms (unchanged look from the prototype)                  */
+/* Small UI atoms                                                       */
 /* ------------------------------------------------------------------ */
 
 function IconCircle({ children, bg, fg }) {
@@ -129,6 +194,63 @@ function TypePill({ type }) {
   return <span className="pill" style={{ background: cfg.bg, color: cfg.fg }}>{cfg.label}</span>;
 }
 
+const CALC_BUTTONS = ["7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "−", "C", "0", ".", "+", "⌫", "="];
+const CALC_MAP = { "÷": "/", "×": "*", "−": "-" };
+
+function AmountInput({ value, onChange, placeholder = "0.00", required }) {
+  const [open, setOpen] = useState(false);
+  const [expr, setExpr] = useState("");
+
+  const press = (btn) => {
+    if (btn === "C") { setExpr(""); return; }
+    if (btn === "⌫") { setExpr((e) => e.slice(0, -1)); return; }
+    if (btn === "=") {
+      const result = safeEval(expr || value || "0");
+      if (!Number.isNaN(result)) {
+        const rounded = Math.round(result * 100) / 100;
+        onChange(String(rounded));
+        setExpr(String(rounded));
+      }
+      return;
+    }
+    setExpr((e) => (e || "") + (CALC_MAP[btn] || btn));
+  };
+
+  return (
+    <div>
+      <div className="flex gap-2">
+        <input
+          type="number" min="0" step="0.01" value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder} required={required}
+        />
+        <button
+          type="button" className="icon-btn" style={{ width: 38 }}
+          onClick={() => { setExpr(value ? String(value) : ""); setOpen((o) => !o); }}
+          aria-label="Open calculator"
+        >
+          <Calculator size={16} />
+        </button>
+      </div>
+      {open && (
+        <div className="calc-popup">
+          <div className="calc-display mono-font">{expr || "0"}</div>
+          <div className="calc-grid">
+            {CALC_BUTTONS.map((b) => (
+              <button
+                type="button" key={b} className={`calc-btn ${b === "=" ? "calc-eq" : ""}`}
+                onClick={() => press(b)}
+              >
+                {b}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Main App                                                             */
 /* ------------------------------------------------------------------ */
@@ -138,15 +260,20 @@ export default function BudgetTracker({ session }) {
   const [categories, setCategories] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [budgets, setBudgets] = useState([]);
-  const [allTags, setAllTags] = useState([]);
+  const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
+
+  const [theme, setTheme] = useState(() => (typeof window !== "undefined" && localStorage.getItem("ledger-theme")) || "dark");
+  useEffect(() => { localStorage.setItem("ledger-theme", theme); }, [theme]);
 
   const [tab, setTab] = useState("dashboard");
   const [txnModal, setTxnModal] = useState(null);
   const [accModal, setAccModal] = useState(null);
   const [catModal, setCatModal] = useState(null);
   const [budgetModal, setBudgetModal] = useState(null);
+  const [goalModal, setGoalModal] = useState(null);
+  const [contributeGoal, setContributeGoal] = useState(null);
 
   /* ---------------- initial load ---------------- */
 
@@ -155,28 +282,25 @@ export default function BudgetTracker({ session }) {
     (async () => {
       setLoading(true);
       setErrorMsg(null);
-      const [accRes, catRes, txnRes, budRes] = await Promise.all([
+      const [accRes, catRes, txnRes, budRes, goalRes] = await Promise.all([
         supabase.from("accounts").select("*").order("created_at"),
         supabase.from("categories").select("*").order("created_at"),
         supabase.from("transactions").select("*").order("occurred_at", { ascending: false }),
         supabase.from("budgets").select("*").order("created_at"),
+        supabase.from("savings_goals").select("*").order("created_at"),
       ]);
       if (cancelled) return;
-      const firstError = accRes.error || catRes.error || txnRes.error || budRes.error;
+      const firstError = accRes.error || catRes.error || txnRes.error || budRes.error || goalRes.error;
       if (firstError) {
         setErrorMsg(firstError.message);
         setLoading(false);
         return;
       }
-      const accs = (accRes.data || []).map(accountFromRow);
-      const cats = (catRes.data || []).map(categoryFromRow);
-      const txns = (txnRes.data || []).map(txnFromRow);
-      const buds = (budRes.data || []).map(budgetFromRow);
-      setAccounts(accs);
-      setCategories(cats);
-      setTransactions(txns);
-      setBudgets(buds);
-      setAllTags([...new Set(txns.flatMap((t) => t.tags || []))]);
+      setAccounts((accRes.data || []).map(accountFromRow));
+      setCategories((catRes.data || []).map(categoryFromRow));
+      setTransactions((txnRes.data || []).map(txnFromRow));
+      setBudgets((budRes.data || []).map(budgetFromRow));
+      setGoals((goalRes.data || []).map(goalFromRow));
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -270,11 +394,23 @@ export default function BudgetTracker({ session }) {
     return budgets.map((b) => {
       const periodStart = startOfPeriod(b.period);
       const spent = transactions
-        .filter((t) => t.type === "expense" && new Date(t.date) >= periodStart && (b.categoryId === "all" || t.categoryId === b.categoryId))
+        .filter((t) => {
+          if (t.type !== "expense" || new Date(t.date) < periodStart) return false;
+          if (t.budgetId) return t.budgetId === b.id;
+          return b.categoryId === "all" || t.categoryId === b.categoryId;
+        })
         .reduce((s, t) => s + t.amount, 0);
       return { ...b, spent, pct: b.amount > 0 ? Math.min(100, (spent / b.amount) * 100) : 0 };
     });
   }, [budgets, transactions]);
+
+  const goalsWithProgress = useMemo(() => {
+    return goals.map((g) => {
+      const saved = g.accountId ? accountBalance(g.accountId) : g.manualSaved;
+      const clamped = Math.max(0, saved);
+      return { ...g, saved: clamped, pct: g.targetAmount > 0 ? Math.min(100, (clamped / g.targetAmount) * 100) : 0 };
+    });
+  }, [goals, accounts, transactions]);
 
   const sortedTransactions = useMemo(() => [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)), [transactions]);
 
@@ -291,7 +427,6 @@ export default function BudgetTracker({ session }) {
       if (error) return setErrorMsg(error.message);
       setTransactions((prev) => [txnFromRow(data), ...prev]);
     }
-    setAllTags((prev) => [...new Set([...prev, ...(txn.tags || [])])]);
     setTxnModal(null);
   };
   const deleteTransaction = async (id) => {
@@ -359,9 +494,36 @@ export default function BudgetTracker({ session }) {
     setBudgets((prev) => prev.filter((b) => b.id !== id));
   };
 
+  const upsertGoal = async (g) => {
+    const row = goalToRow(g);
+    if (g.id && goals.some((x) => x.id === g.id)) {
+      const { data, error } = await supabase.from("savings_goals").update(row).eq("id", g.id).select().single();
+      if (error) return setErrorMsg(error.message);
+      setGoals((prev) => prev.map((x) => (x.id === g.id ? goalFromRow(data) : x)));
+    } else {
+      const { data, error } = await supabase.from("savings_goals").insert(row).select().single();
+      if (error) return setErrorMsg(error.message);
+      setGoals((prev) => [...prev, goalFromRow(data)]);
+    }
+    setGoalModal(null);
+  };
+  const deleteGoal = async (id) => {
+    const { error } = await supabase.from("savings_goals").delete().eq("id", id);
+    if (error) return setErrorMsg(error.message);
+    setGoals((prev) => prev.filter((g) => g.id !== id));
+  };
+  const contributeToGoal = async (goal, delta) => {
+    const newAmount = Math.max(0, (goal.manualSaved || 0) + delta);
+    const { data, error } = await supabase.from("savings_goals").update({ manual_saved: newAmount }).eq("id", goal.id).select().single();
+    if (error) return setErrorMsg(error.message);
+    setGoals((prev) => prev.map((g) => (g.id === goal.id ? goalFromRow(data) : g)));
+    setContributeGoal(null);
+  };
+
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
   const categoryName = (id) => (id === "all" ? "All categories" : categories.find((c) => c.id === id)?.name || "Uncategorized");
   const categoryColor = (id) => categories.find((c) => c.id === id)?.color || "#888780";
+  const categoryIcon = (id) => categories.find((c) => c.id === id)?.icon || "Tag";
 
   const NAV = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -369,24 +531,36 @@ export default function BudgetTracker({ session }) {
     { id: "accounts", label: "Accounts", icon: Landmark },
     { id: "categories", label: "Categories", icon: FolderTree },
     { id: "budgets", label: "Budgets", icon: Target },
+    { id: "savings", label: "Savings", icon: PiggyBank },
   ];
 
   return (
-    <div className="bt-root">
+    <div className="bt-root" data-theme={theme}>
       <style>{`
         .bt-root {
-          --ink: #1B2521; --ink-soft: #4A4438; --paper: #F6F1E4; --paper-dim: #ECE4CF;
+          font-family: 'Inter', system-ui, sans-serif;
+          min-height: 100vh; padding: 1.25rem;
           --forest: #3E6B4F; --forest-100: #E3EDE5; --forest-800: #1E3D2A;
           --rust: #9A3324; --rust-100: #F3E1DB; --rust-800: #5C1E15;
           --slate: #55696B; --slate-100: #E4EAEA; --slate-800: #2C3839;
           --brass: #C08829; --brass-100: #F6E9D1; --brass-800: #6E4C15;
-          font-family: 'Inter', system-ui, sans-serif; background: var(--ink); color: var(--paper);
-          min-height: 100vh; padding: 1.25rem;
+          --ink: #1B2521; --ink-soft: #4A4438; --paper-dim: #ECE4CF;
         }
+        .bt-root[data-theme="dark"] {
+          --bg: #1B2521; --fg: #F6F1E4; --card-bg: #F6F1E4; --card-border: rgba(27,37,33,0.15);
+          --muted: rgba(246,241,228,0.55); --muted-strong: rgba(246,241,228,0.75);
+          --sidebar-active-bg: rgba(246,241,228,0.1); --metric-bg: rgba(246,241,228,0.06); --metric-border: rgba(246,241,228,0.12);
+        }
+        .bt-root[data-theme="light"] {
+          --bg: #EFEADB; --fg: #1B2521; --card-bg: #FFFFFF; --card-border: rgba(27,37,33,0.12);
+          --muted: rgba(27,37,33,0.55); --muted-strong: rgba(27,37,33,0.72);
+          --sidebar-active-bg: rgba(27,37,33,0.07); --metric-bg: rgba(27,37,33,0.035); --metric-border: rgba(27,37,33,0.1);
+        }
+        .bt-root { background: var(--bg); color: var(--fg); }
         .bt-root * { box-sizing: border-box; }
         .display-font { font-family: 'Fraunces', Georgia, serif; }
         .mono-font { font-family: 'IBM Plex Mono', monospace; }
-        .paper-card { background: var(--paper); color: var(--ink); border-radius: 10px; box-shadow: 0 1px 0 rgba(0,0,0,0.08); }
+        .paper-card { background: var(--card-bg); color: var(--ink); border-radius: 10px; box-shadow: 0 1px 0 rgba(0,0,0,0.06); }
         .field-label { display:block; font-size: 12px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 4px; }
         input, select, textarea {
           width: 100%; background: var(--paper-dim); border: 1px solid rgba(27,37,33,0.15);
@@ -401,14 +575,24 @@ export default function BudgetTracker({ session }) {
         .icon-btn:hover { background: rgba(27,37,33,0.06); }
         .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
         .tag-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(27,37,33,0.08); color: var(--ink-soft); padding: 2px 8px; border-radius: 999px; font-size: 11px; }
-        .nav-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 8px; border: none; background: transparent; color: rgba(246,241,228,0.7); font-size: 14px; font-weight: 600; cursor: pointer; text-align: left; }
-        .nav-btn.active { background: rgba(246,241,228,0.1); color: var(--paper); }
-        .nav-btn:hover:not(.active) { background: rgba(246,241,228,0.06); }
+        .nav-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 8px; border: none; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer; text-align: left; }
+        .nav-btn.active { background: var(--sidebar-active-bg); color: var(--fg); }
+        .nav-btn:hover:not(.active) { background: var(--sidebar-active-bg); }
         .receipt-row { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px dashed rgba(27,37,33,0.18); }
         .receipt-row:last-child { border-bottom: none; }
         .progress-track { height: 8px; border-radius: 999px; background: rgba(27,37,33,0.1); overflow: hidden; }
         .progress-fill { height: 100%; border-radius: 999px; }
-        .metric-card { background: rgba(246,241,228,0.06); border: 1px solid rgba(246,241,228,0.12); border-radius: 10px; padding: 14px 16px; }
+        .metric-card { background: var(--metric-bg); border: 1px solid var(--metric-border); border-radius: 10px; padding: 14px 16px; }
+        .theme-toggle { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:8px; border:1px solid var(--metric-border); background: var(--metric-bg); color: var(--fg); cursor:pointer; }
+        .icon-grid { display:grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-height: 160px; overflow-y:auto; padding: 4px; background: rgba(27,37,33,0.04); border-radius: 8px; }
+        .icon-swatch { display:flex; align-items:center; justify-content:center; width: 32px; height: 32px; border-radius: 8px; border: 2px solid transparent; background: var(--paper-dim); cursor:pointer; color: var(--ink-soft); }
+        .icon-swatch.selected { border-color: var(--forest); background: var(--forest-100); color: var(--forest-800); }
+        .calc-popup { margin-top: 8px; background: rgba(27,37,33,0.04); border: 1px solid rgba(27,37,33,0.12); border-radius: 8px; padding: 8px; }
+        .calc-display { text-align: right; font-size: 18px; padding: 6px 8px; margin-bottom: 6px; color: var(--ink); }
+        .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .calc-btn { padding: 10px 0; border-radius: 6px; border: 1px solid rgba(27,37,33,0.12); background: #fff; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
+        .calc-btn:active { transform: scale(0.95); }
+        .calc-eq { background: var(--forest); color: #fff; border-color: var(--forest); }
         @media (min-width: 768px) { .bt-layout { display: grid; grid-template-columns: 200px 1fr; gap: 1.5rem; } }
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
       `}</style>
@@ -430,7 +614,12 @@ export default function BudgetTracker({ session }) {
               </div>
               <span className="display-font" style={{ fontSize: 18, fontWeight: 600 }}>Ledger</span>
             </div>
-            <button className="icon-btn md:hidden" onClick={() => supabase.auth.signOut()} aria-label="Sign out"><LogOut size={16} /></button>
+            <div className="flex items-center gap-1">
+              <button className="theme-toggle" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
+                {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+              </button>
+              <button className="icon-btn md:hidden" onClick={() => supabase.auth.signOut()} aria-label="Sign out"><LogOut size={16} /></button>
+            </div>
           </div>
           <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-1">
             {NAV.map((n) => {
@@ -443,15 +632,15 @@ export default function BudgetTracker({ session }) {
             })}
           </nav>
           <div className="hidden md:block mt-6 metric-card">
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", color: "rgba(246,241,228,0.55)" }}>Net worth</div>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)" }}>Net worth</div>
             <div className="mono-font" style={{ fontSize: 20, fontWeight: 600, marginTop: 4 }}>{fmtMoney(netWorth)}</div>
           </div>
-          <div className="hidden md:block mt-4" style={{ fontSize: 12, color: "rgba(246,241,228,0.55)" }}>
+          <div className="hidden md:block mt-4" style={{ fontSize: 12, color: "var(--muted)" }}>
             {session.user.email}
             <button
               onClick={() => supabase.auth.signOut()}
               className="flex items-center gap-1"
-              style={{ marginTop: 6, background: "none", border: "none", color: "rgba(246,241,228,0.75)", cursor: "pointer", fontSize: 12, padding: 0 }}
+              style={{ marginTop: 6, background: "none", border: "none", color: "var(--muted-strong)", cursor: "pointer", fontSize: 12, padding: 0 }}
             >
               <LogOut size={13} /> Sign out
             </button>
@@ -460,21 +649,23 @@ export default function BudgetTracker({ session }) {
 
         <div>
           {loading ? (
-            <p style={{ fontSize: 14, color: "rgba(246,241,228,0.7)" }}>Loading your data…</p>
+            <p style={{ fontSize: 14, color: "var(--muted-strong)" }}>Loading your data…</p>
           ) : (
             <>
               {tab === "dashboard" && (
                 <DashboardView
                   netWorth={netWorth} monthTotals={monthTotals} accountsWithBalance={accountsWithBalance}
                   dailySeries={dailySeries} categoryBreakdown={categoryBreakdown} budgetProgress={budgetProgress}
-                  sortedTransactions={sortedTransactions} accountName={accountName} categoryName={categoryName}
+                  goalsWithProgress={goalsWithProgress} sortedTransactions={sortedTransactions}
+                  accountName={accountName} categoryName={categoryName} categoryIcon={categoryIcon}
                   onNewTxn={() => setTxnModal("new")}
                 />
               )}
               {tab === "transactions" && (
                 <TransactionsView
                   transactions={sortedTransactions} accountName={accountName} categoryName={categoryName}
-                  categoryColor={categoryColor} onNew={() => setTxnModal("new")} onEdit={(t) => setTxnModal(t)} onDelete={deleteTransaction}
+                  categoryColor={categoryColor} categoryIcon={categoryIcon}
+                  onNew={() => setTxnModal("new")} onEdit={(t) => setTxnModal(t)} onDelete={deleteTransaction}
                 />
               )}
               {tab === "accounts" && (
@@ -486,18 +677,35 @@ export default function BudgetTracker({ session }) {
               {tab === "budgets" && (
                 <BudgetsView budgetProgress={budgetProgress} categoryName={categoryName} onNew={() => setBudgetModal("new")} onEdit={(b) => setBudgetModal(b)} onDelete={deleteBudget} />
               )}
+              {tab === "savings" && (
+                <SavingsView
+                  goalsWithProgress={goalsWithProgress} accountName={accountName}
+                  onNew={() => setGoalModal("new")} onEdit={(g) => setGoalModal(g)} onDelete={deleteGoal}
+                  onContribute={(g) => setContributeGoal(g)}
+                />
+              )}
             </>
           )}
         </div>
       </div>
 
       {txnModal && (
-        <TransactionForm initial={txnModal === "new" ? null : txnModal} accounts={accounts} categories={categories} allTags={allTags} onCancel={() => setTxnModal(null)} onSave={upsertTransaction} />
+        <TransactionForm
+          initial={txnModal === "new" ? null : txnModal}
+          accounts={accounts} categories={categories} budgets={budgets}
+          onCancel={() => setTxnModal(null)} onSave={upsertTransaction}
+        />
       )}
       {accModal && <AccountForm initial={accModal === "new" ? null : accModal} onCancel={() => setAccModal(null)} onSave={upsertAccount} />}
       {catModal && <CategoryForm initial={catModal === "new" ? null : catModal} onCancel={() => setCatModal(null)} onSave={upsertCategory} />}
       {budgetModal && (
         <BudgetForm initial={budgetModal === "new" ? null : budgetModal} categories={categories} onCancel={() => setBudgetModal(null)} onSave={upsertBudget} />
+      )}
+      {goalModal && (
+        <GoalForm initial={goalModal === "new" ? null : goalModal} accounts={accounts} onCancel={() => setGoalModal(null)} onSave={upsertGoal} />
+      )}
+      {contributeGoal && (
+        <ContributeForm goal={contributeGoal} onCancel={() => setContributeGoal(null)} onSave={contributeToGoal} />
       )}
     </div>
   );
@@ -507,7 +715,13 @@ export default function BudgetTracker({ session }) {
 /* Dashboard                                                            */
 /* ------------------------------------------------------------------ */
 
-function DashboardView({ netWorth, monthTotals, accountsWithBalance, dailySeries, categoryBreakdown, budgetProgress, sortedTransactions, accountName, categoryName, onNewTxn }) {
+function DashboardView({
+  netWorth, monthTotals, accountsWithBalance, dailySeries, categoryBreakdown, budgetProgress,
+  goalsWithProgress, sortedTransactions, accountName, categoryName, categoryIcon, onNewTxn,
+}) {
+  const totalSaved = goalsWithProgress.reduce((s, g) => s + g.saved, 0);
+  const totalTarget = goalsWithProgress.reduce((s, g) => s + g.targetAmount, 0);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -517,21 +731,29 @@ function DashboardView({ netWorth, monthTotals, accountsWithBalance, dailySeries
 
       <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
         <div className="metric-card">
-          <div style={{ fontSize: 11, textTransform: "uppercase", color: "rgba(246,241,228,0.55)" }}>Net worth</div>
+          <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Net worth</div>
           <div className="mono-font" style={{ fontSize: 22, fontWeight: 600 }}>{fmtMoney(netWorth)}</div>
         </div>
         <div className="metric-card">
-          <div style={{ fontSize: 11, textTransform: "uppercase", color: "rgba(246,241,228,0.55)" }}>Income (30d)</div>
-          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#7FBE97" }}>{fmtMoney(monthTotals.inc)}</div>
+          <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Income (30d)</div>
+          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#3E6B4F" }}>{fmtMoney(monthTotals.inc)}</div>
         </div>
         <div className="metric-card">
-          <div style={{ fontSize: 11, textTransform: "uppercase", color: "rgba(246,241,228,0.55)" }}>Expenses (30d)</div>
-          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#E28A76" }}>{fmtMoney(monthTotals.exp)}</div>
+          <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Expenses (30d)</div>
+          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#9A3324" }}>{fmtMoney(monthTotals.exp)}</div>
         </div>
-        <div className="metric-card">
-          <div style={{ fontSize: 11, textTransform: "uppercase", color: "rgba(246,241,228,0.55)" }}>Net (30d)</div>
-          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600 }}>{fmtMoney(monthTotals.inc - monthTotals.exp)}</div>
-        </div>
+        {goalsWithProgress.length > 0 ? (
+          <div className="metric-card">
+            <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Total saved</div>
+            <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#C08829" }}>{fmtMoney(totalSaved)}</div>
+            <div style={{ fontSize: 10, color: "var(--muted)" }}>of {fmtMoney(totalTarget)} goal</div>
+          </div>
+        ) : (
+          <div className="metric-card">
+            <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Net (30d)</div>
+            <div className="mono-font" style={{ fontSize: 22, fontWeight: 600 }}>{fmtMoney(monthTotals.inc - monthTotals.exp)}</div>
+          </div>
+        )}
       </div>
 
       <div className="paper-card p-4 mb-4">
@@ -609,7 +831,9 @@ function DashboardView({ netWorth, monthTotals, accountsWithBalance, dailySeries
         <div className="paper-card p-4">
           <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 6, color: "var(--ink-soft)" }}>Recent activity</h3>
           <div>
-            {sortedTransactions.slice(0, 6).map((t) => <ReceiptRow key={t.id} t={t} accountName={accountName} categoryName={categoryName} />)}
+            {sortedTransactions.slice(0, 6).map((t) => (
+              <ReceiptRow key={t.id} t={t} accountName={accountName} categoryName={categoryName} categoryIcon={categoryIcon} />
+            ))}
             {sortedTransactions.length === 0 && <p style={{ fontSize: 12, color: "var(--ink-soft)" }}>Nothing logged yet.</p>}
           </div>
         </div>
@@ -631,7 +855,7 @@ function DashboardView({ netWorth, monthTotals, accountsWithBalance, dailySeries
   );
 }
 
-function ReceiptRow({ t, accountName, categoryName }) {
+function ReceiptRow({ t, accountName, categoryName, categoryIcon }) {
   const isExp = t.type === "expense";
   const isInc = t.type === "income";
   const sign = isExp ? "−" : isInc ? "+" : "";
@@ -640,7 +864,7 @@ function ReceiptRow({ t, accountName, categoryName }) {
   return (
     <div className="receipt-row">
       <IconCircle bg={isExp ? "var(--rust-100)" : isInc ? "var(--forest-100)" : "var(--slate-100)"} fg={color}>
-        {isExp ? <ArrowDownCircle size={17} /> : isInc ? <ArrowUpCircle size={17} /> : <ArrowLeftRight size={16} />}
+        {isExp ? <CategoryIcon name={categoryIcon(t.categoryId)} size={17} /> : isInc ? <ArrowUpCircle size={17} /> : <ArrowLeftRight size={16} />}
       </IconCircle>
       <div className="flex-1 min-w-0">
         <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.note || label}</div>
@@ -655,27 +879,44 @@ function ReceiptRow({ t, accountName, categoryName }) {
 /* Transactions                                                         */
 /* ------------------------------------------------------------------ */
 
-function TransactionsView({ transactions, accountName, categoryName, categoryColor, onNew, onEdit, onDelete }) {
+function TransactionsView({ transactions, accountName, categoryName, categoryColor, categoryIcon, onNew, onEdit, onDelete }) {
   const [filterType, setFilterType] = useState("all");
-  const filtered = filterType === "all" ? transactions : transactions.filter((t) => t.type === filterType);
+  const [query, setQuery] = useState("");
+
+  const filtered = transactions.filter((t) => {
+    if (filterType !== "all" && t.type !== filterType) return false;
+    if (!query.trim()) return true;
+    const q = query.trim().toLowerCase();
+    const label = t.type === "transfer" ? `${accountName(t.fromAccountId)} ${accountName(t.toAccountId)}` : `${accountName(t.accountId)} ${categoryName(t.categoryId)}`;
+    return (t.note || "").toLowerCase().includes(q) || label.toLowerCase().includes(q);
+  });
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <h2 className="display-font" style={{ fontSize: 24 }}>Transactions</h2>
-        <div className="flex items-center gap-2">
-          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ width: "auto" }}>
-            <option value="all">All types</option>
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-            <option value="transfer">Transfer</option>
-          </select>
-          <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> Log entry</button>
+        <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> Log entry</button>
+      </div>
+
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="paper-card flex items-center gap-2" style={{ flex: 1, minWidth: 200, padding: "6px 10px" }}>
+          <Search size={15} style={{ color: "var(--ink-soft)", flexShrink: 0 }} />
+          <input
+            value={query} onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search note, category, or account…"
+            style={{ background: "transparent", border: "none", padding: "4px 0" }}
+          />
         </div>
+        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ width: "auto" }}>
+          <option value="all">All types</option>
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+          <option value="transfer">Transfer</option>
+        </select>
       </div>
 
       <div className="paper-card">
-        {filtered.length === 0 && <p style={{ padding: 20, fontSize: 13, color: "var(--ink-soft)" }}>Nothing logged yet. Add your first entry.</p>}
+        {filtered.length === 0 && <p style={{ padding: 20, fontSize: 13, color: "var(--ink-soft)" }}>Nothing matches yet.</p>}
         <div style={{ padding: "4px 14px" }}>
           {filtered.map((t) => {
             const isExp = t.type === "expense";
@@ -685,7 +926,7 @@ function TransactionsView({ transactions, accountName, categoryName, categoryCol
             return (
               <div key={t.id} className="receipt-row">
                 <IconCircle bg={isExp ? "var(--rust-100)" : isInc ? "var(--forest-100)" : "var(--slate-100)"} fg={color}>
-                  {isExp ? <ArrowDownCircle size={17} /> : isInc ? <ArrowUpCircle size={17} /> : <ArrowLeftRight size={16} />}
+                  {isExp ? <CategoryIcon name={categoryIcon(t.categoryId)} size={17} /> : isInc ? <ArrowUpCircle size={17} /> : <ArrowLeftRight size={16} />}
                 </IconCircle>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -693,10 +934,9 @@ function TransactionsView({ transactions, accountName, categoryName, categoryCol
                     <TypePill type={t.type} />
                     {(isExp || isInc) && (
                       <span className="tag-chip" style={{ background: `${categoryColor(t.categoryId)}22`, color: categoryColor(t.categoryId) }}>
-                        {categoryName(t.categoryId)}
+                        <CategoryIcon name={categoryIcon(t.categoryId)} size={10} />{categoryName(t.categoryId)}
                       </span>
                     )}
-                    {t.tags?.map((tg) => <span key={tg} className="tag-chip"><TagIcon size={10} />{tg}</span>)}
                   </div>
                   <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 2 }}>
                     {isExp || isInc ? accountName(t.accountId) : `${accountName(t.fromAccountId)} → ${accountName(t.toAccountId)}`}
@@ -750,7 +990,7 @@ function AccountsView({ accounts, onNew, onEdit, onDelete, netWorth }) {
             <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 2 }}>Opening balance {fmtMoney(a.initialBalance)}</div>
           </div>
         ))}
-        {accounts.length === 0 && <p style={{ fontSize: 13, color: "rgba(246,241,228,0.6)" }}>No accounts yet — create your first one.</p>}
+        {accounts.length === 0 && <p style={{ fontSize: 13, color: "var(--muted-strong)" }}>No accounts yet — create your first one.</p>}
       </div>
     </div>
   );
@@ -772,7 +1012,9 @@ function CategoriesView({ categories, transactions, onNew, onEdit, onDelete }) {
         {list.map((c) => (
           <div key={c.id} className="flex items-center justify-between" style={{ padding: "6px 0", borderBottom: "1px dashed rgba(27,37,33,0.15)" }}>
             <div className="flex items-center gap-2">
-              <span style={{ width: 10, height: 10, borderRadius: 3, background: c.color, display: "inline-block" }} />
+              <span className="flex items-center justify-center rounded-full" style={{ width: 24, height: 24, background: `${c.color}22`, color: c.color }}>
+                <CategoryIcon name={c.icon} size={13} />
+              </span>
               <span style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</span>
               <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>{usageCount(c.id)} entries</span>
             </div>
@@ -832,7 +1074,58 @@ function BudgetsView({ budgetProgress, categoryName, onNew, onEdit, onDelete }) 
             </div>
           </div>
         ))}
-        {budgetProgress.length === 0 && <p style={{ fontSize: 13, color: "rgba(246,241,228,0.6)" }}>No budgets set yet.</p>}
+        {budgetProgress.length === 0 && <p style={{ fontSize: 13, color: "var(--muted-strong)" }}>No budgets set yet.</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Savings                                                              */
+/* ------------------------------------------------------------------ */
+
+function SavingsView({ goalsWithProgress, accountName, onNew, onEdit, onDelete, onContribute }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="display-font" style={{ fontSize: 24 }}>Savings</h2>
+        <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> New goal</button>
+      </div>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+        {goalsWithProgress.map((g) => (
+          <div key={g.id} className="paper-card p-4" style={{ borderTop: `4px solid ${g.color}` }}>
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{g.name}</div>
+                <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>
+                  {g.accountId ? `Linked to ${accountName(g.accountId)}` : "Tracked manually"}
+                  {g.targetDate ? ` · by ${fmtDate(g.targetDate)}` : ""}
+                </div>
+              </div>
+              <div className="flex gap-1">
+                <button className="icon-btn" onClick={() => onEdit(g)} aria-label="Edit"><Pencil size={14} /></button>
+                <button className="icon-btn" onClick={() => onDelete(g.id)} aria-label="Delete"><Trash2 size={14} /></button>
+              </div>
+            </div>
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${g.pct}%`, background: g.pct >= 100 ? "var(--forest)" : "var(--brass)" }} />
+            </div>
+            <div className="flex justify-between mt-2 mono-font" style={{ fontSize: 12 }}>
+              <span>{fmtMoney(g.saved)} saved</span>
+              <span style={{ color: "var(--ink-soft)" }}>of {fmtMoney(g.targetAmount)}</span>
+            </div>
+            {!g.accountId && (
+              <button className="btn btn-outline-dark mt-3" style={{ width: "100%", justifyContent: "center" }} onClick={() => onContribute(g)}>
+                <PiggyBank size={14} /> Add contribution
+              </button>
+            )}
+          </div>
+        ))}
+        {goalsWithProgress.length === 0 && (
+          <p style={{ fontSize: 13, color: "var(--muted-strong)" }}>
+            No savings goals yet. Create one — link it to a dedicated account for automatic tracking, or track it manually.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -842,18 +1135,17 @@ function BudgetsView({ budgetProgress, categoryName, onNew, onEdit, onDelete }) 
 /* Forms                                                                */
 /* ------------------------------------------------------------------ */
 
-function TransactionForm({ initial, accounts, categories, allTags, onCancel, onSave }) {
+function TransactionForm({ initial, accounts, categories, budgets, onCancel, onSave }) {
   const [type, setType] = useState(initial?.type || "expense");
   const [amount, setAmount] = useState(initial?.amount ?? "");
   const [accountId, setAccountId] = useState(initial?.accountId || accounts[0]?.id || "");
   const [fromAccountId, setFromAccountId] = useState(initial?.fromAccountId || accounts[0]?.id || "");
   const [toAccountId, setToAccountId] = useState(initial?.toAccountId || accounts[1]?.id || accounts[0]?.id || "");
   const [categoryId, setCategoryId] = useState(initial?.categoryId || "");
+  const [budgetId, setBudgetId] = useState(initial?.budgetId || "");
   const [feeEnabled, setFeeEnabled] = useState(initial?.fee?.enabled || false);
   const [feeAmount, setFeeAmount] = useState(initial?.fee?.amount ?? "");
   const [note, setNote] = useState(initial?.note || "");
-  const [tags, setTags] = useState(initial?.tags || []);
-  const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
 
   const relevantCats = categories.filter((c) => c.type === type);
@@ -864,24 +1156,17 @@ function TransactionForm({ initial, accounts, categories, allTags, onCancel, onS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
 
-  const addTag = (t) => {
-    const clean = t.trim();
-    if (!clean || tags.includes(clean)) return;
-    setTags([...tags, clean]);
-    setTagInput("");
-  };
-
   const submit = async (e) => {
     e.preventDefault();
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return;
-    const base = { id: initial?.id, type, amount: amt, note, tags, date: initial?.date || new Date().toISOString() };
+    const base = { id: initial?.id, type, amount: amt, note, date: initial?.date || new Date().toISOString() };
     setSaving(true);
     if (type === "transfer") {
       if (fromAccountId === toAccountId) { setSaving(false); return; }
       await onSave({ ...base, fromAccountId, toAccountId, fee: { enabled: feeEnabled, amount: feeEnabled ? parseFloat(feeAmount) || 0 : 0 } });
     } else {
-      await onSave({ ...base, accountId, categoryId });
+      await onSave({ ...base, accountId, categoryId, budgetId: type === "expense" ? budgetId || null : null });
     }
     setSaving(false);
   };
@@ -904,7 +1189,7 @@ function TransactionForm({ initial, accounts, categories, allTags, onCancel, onS
         </Field>
 
         <Field label="Amount (PHP)">
-          <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required />
+          <AmountInput value={amount} onChange={setAmount} required />
         </Field>
 
         {type !== "transfer" ? (
@@ -920,6 +1205,14 @@ function TransactionForm({ initial, accounts, categories, allTags, onCancel, onS
                 {relevantCats.length === 0 && <option value="">No categories — add one first</option>}
               </select>
             </Field>
+            {type === "expense" && (
+              <Field label="Assign to a budget">
+                <select value={budgetId} onChange={(e) => setBudgetId(e.target.value)}>
+                  <option value="">Auto (match by category)</option>
+                  {budgets.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.period})</option>)}
+                </select>
+              </Field>
+            )}
           </>
         ) : (
           <>
@@ -947,9 +1240,7 @@ function TransactionForm({ initial, accounts, categories, allTags, onCancel, onS
                 </button>
                 <span style={{ fontSize: 13 }}>{feeEnabled ? "This transfer has a fee" : "No fee for this transfer"}</span>
               </div>
-              {feeEnabled && (
-                <input type="number" min="0" step="0.01" value={feeAmount} onChange={(e) => setFeeAmount(e.target.value)} placeholder="Fee amount" style={{ marginTop: 8 }} />
-              )}
+              {feeEnabled && <AmountInput value={feeAmount} onChange={setFeeAmount} placeholder="Fee amount" />}
             </Field>
           </>
         )}
@@ -957,30 +1248,6 @@ function TransactionForm({ initial, accounts, categories, allTags, onCancel, onS
         <Field label="Note">
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What was this for?" />
         </Field>
-
-        {type !== "transfer" && (
-          <Field label="Tags">
-            <div className="flex flex-wrap gap-2 mb-2">
-              {tags.map((t) => (
-                <span key={t} className="tag-chip">
-                  {t}
-                  <button type="button" onClick={() => setTags(tags.filter((x) => x !== t))} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}>
-                    <X size={10} />
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                value={tagInput} onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
-                placeholder="Type a tag and press enter" list="tag-suggestions"
-              />
-              <datalist id="tag-suggestions">{allTags.map((t) => <option key={t} value={t} />)}</datalist>
-              <button type="button" className="btn btn-outline-dark" onClick={() => addTag(tagInput)}>Add</button>
-            </div>
-          </Field>
-        )}
 
         <div className="flex justify-end gap-2 mt-4">
           <button type="button" className="btn btn-outline-dark" onClick={onCancel}>Cancel</button>
@@ -1016,11 +1283,16 @@ function AccountForm({ initial, onCancel, onSave }) {
             <option value="bank">Bank</option>
             <option value="ewallet">E-wallet</option>
             <option value="credit">Credit card</option>
+            <option value="savings">Savings</option>
             <option value="investment">Investment</option>
+            <option value="crypto">Crypto</option>
+            <option value="loan">Loan</option>
             <option value="other">Other</option>
           </select>
         </Field>
-        <Field label="Opening balance (PHP)"><input type="number" step="0.01" value={initialBalance} onChange={(e) => setInitialBalance(e.target.value)} /></Field>
+        <Field label="Opening balance (PHP)">
+          <AmountInput value={initialBalance} onChange={setInitialBalance} />
+        </Field>
         <Field label="Color tag">
           <div className="flex gap-2 flex-wrap">
             {PALETTE.map((c) => (
@@ -1041,13 +1313,14 @@ function CategoryForm({ initial, onCancel, onSave }) {
   const [name, setName] = useState(initial?.name || "");
   const [type, setType] = useState(initial?.type || "expense");
   const [color, setColor] = useState(initial?.color || PALETTE[Math.floor(Math.random() * PALETTE.length)]);
+  const [icon, setIcon] = useState(initial?.icon || "Tag");
   const [saving, setSaving] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
-    await onSave({ id: initial?.id, name: name.trim(), type, color });
+    await onSave({ id: initial?.id, name: name.trim(), type, color, icon });
     setSaving(false);
   };
 
@@ -1060,6 +1333,20 @@ function CategoryForm({ initial, onCancel, onSave }) {
             {["expense", "income"].map((t) => (
               <button type="button" key={t} className="btn" style={{ flex: 1, justifyContent: "center", background: type === t ? "var(--forest)" : "var(--paper-dim)", color: type === t ? "#fff" : "var(--ink-soft)" }} onClick={() => setType(t)}>
                 {t === "expense" ? "Expense" : "Income"}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Icon">
+          <div className="icon-grid">
+            {ICON_NAMES.map((name2) => (
+              <button
+                type="button" key={name2}
+                className={`icon-swatch ${icon === name2 ? "selected" : ""}`}
+                onClick={() => setIcon(name2)}
+                aria-label={name2}
+              >
+                <CategoryIcon name={name2} size={16} />
               </button>
             ))}
           </div>
@@ -1115,10 +1402,97 @@ function BudgetForm({ initial, categories, onCancel, onSave }) {
             {expenseCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </Field>
-        <Field label="Budget amount (PHP)"><input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required /></Field>
+        <Field label="Budget amount (PHP)"><AmountInput value={amount} onChange={setAmount} required /></Field>
         <div className="flex justify-end gap-2 mt-4">
           <button type="button" className="btn btn-outline-dark" onClick={onCancel}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : initial ? "Save changes" : "Create budget"}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function GoalForm({ initial, accounts, onCancel, onSave }) {
+  const [name, setName] = useState(initial?.name || "");
+  const [targetAmount, setTargetAmount] = useState(initial?.targetAmount ?? "");
+  const [targetDate, setTargetDate] = useState(initial?.targetDate ? initial.targetDate.slice(0, 10) : "");
+  const [accountId, setAccountId] = useState(initial?.accountId || "");
+  const [color, setColor] = useState(initial?.color || PALETTE[Math.floor(Math.random() * PALETTE.length)]);
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const amt = parseFloat(targetAmount);
+    if (!name.trim() || !amt || amt <= 0) return;
+    setSaving(true);
+    await onSave({
+      id: initial?.id, name: name.trim(), targetAmount: amt,
+      targetDate: targetDate || null, accountId: accountId || null,
+      manualSaved: initial?.manualSaved ?? 0, color,
+    });
+    setSaving(false);
+  };
+
+  return (
+    <Modal title={initial ? "Edit savings goal" : "New savings goal"} onClose={onCancel}>
+      <form onSubmit={submit}>
+        <Field label="Goal name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Emergency fund" required /></Field>
+        <Field label="Target amount (PHP)"><AmountInput value={targetAmount} onChange={setTargetAmount} required /></Field>
+        <Field label="Target date (optional)">
+          <input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+        </Field>
+        <Field label="Track using">
+          <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            <option value="">Manually (I'll add contributions myself)</option>
+            {accounts.map((a) => <option key={a.id} value={a.id}>Linked to {a.name} — auto-tracks that account's balance</option>)}
+          </select>
+        </Field>
+        <Field label="Color tag">
+          <div className="flex gap-2 flex-wrap">
+            {PALETTE.map((c) => (
+              <button type="button" key={c} onClick={() => setColor(c)} style={{ width: 26, height: 26, borderRadius: "50%", background: c, cursor: "pointer", border: color === c ? "2px solid var(--ink)" : "2px solid transparent" }} aria-label={`Choose color ${c}`} />
+            ))}
+          </div>
+        </Field>
+        <div className="flex justify-end gap-2 mt-4">
+          <button type="button" className="btn btn-outline-dark" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : initial ? "Save changes" : "Create goal"}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function ContributeForm({ goal, onCancel, onSave }) {
+  const [amount, setAmount] = useState("");
+  const [mode, setMode] = useState("add"); // 'add' | 'remove'
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) return;
+    setSaving(true);
+    await onSave(goal, mode === "add" ? amt : -amt);
+    setSaving(false);
+  };
+
+  return (
+    <Modal title={`Update "${goal.name}"`} onClose={onCancel}>
+      <form onSubmit={submit}>
+        <Field label="Currently saved">
+          <p className="mono-font" style={{ fontSize: 16, fontWeight: 600 }}>{fmtMoney(goal.manualSaved || 0)}</p>
+        </Field>
+        <Field label="Action">
+          <div className="flex gap-2">
+            <button type="button" className="btn" style={{ flex: 1, justifyContent: "center", background: mode === "add" ? "var(--forest)" : "var(--paper-dim)", color: mode === "add" ? "#fff" : "var(--ink-soft)" }} onClick={() => setMode("add")}>Add money</button>
+            <button type="button" className="btn" style={{ flex: 1, justifyContent: "center", background: mode === "remove" ? "var(--rust)" : "var(--paper-dim)", color: mode === "remove" ? "#fff" : "var(--ink-soft)" }} onClick={() => setMode("remove")}>Withdraw</button>
+          </div>
+        </Field>
+        <Field label="Amount (PHP)"><AmountInput value={amount} onChange={setAmount} required /></Field>
+        <div className="flex justify-end gap-2 mt-4">
+          <button type="button" className="btn btn-outline-dark" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : "Update"}</button>
         </div>
       </form>
     </Modal>
