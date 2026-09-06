@@ -5,8 +5,8 @@ import {
 } from "recharts";
 import {
   Plus, Trash2, Pencil, X, ArrowLeftRight, Wallet, LayoutDashboard,
-  ListOrdered, FolderTree, Target, Check, Landmark, ArrowDownCircle,
-  ArrowUpCircle, LogOut, Calculator, Sun, Moon, Search, PiggyBank,
+  ListOrdered, FolderTree, Target, Check, Landmark, ArrowUpCircle,
+  LogOut, Calculator, Sun, Moon, Search, PiggyBank, Scale, Eye, EyeOff,
   ShoppingCart, Utensils, Car, Home, Zap, Heart, Gift, Plane, BookOpen,
   Gamepad2, Smartphone, Wifi, Coffee, Dumbbell, Baby, PawPrint, Briefcase,
   GraduationCap, Music, Film, Bus, Fuel, ShoppingBag, Pill, Shirt,
@@ -18,7 +18,7 @@ import { supabase } from "./supabaseClient";
 /* Tokens & helpers                                                    */
 /* ------------------------------------------------------------------ */
 
-const PALETTE = ["#3E6B4F", "#9A3324", "#55696B", "#C08829", "#4A5FA0", "#7A5C8E", "#B0793E", "#2E7C7A"];
+const PALETTE = ["#5C7A52", "#A13A1F", "#6E5A47", "#B8842A", "#4C5F8A", "#7A5079", "#B0793E", "#2E7C6E"];
 
 const ICON_MAP = {
   ShoppingCart, Utensils, Car, Home, Zap, Heart, Gift, Plane, BookOpen,
@@ -39,6 +39,7 @@ const fmtMoney = (n) =>
 const fmtDate = (iso) => new Date(iso).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 const fmtTime = (iso) => new Date(iso).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
 const fmtDay = (d) => d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+const MASK = "•••••";
 
 function startOfPeriod(period, ref = new Date()) {
   const d = new Date(ref);
@@ -119,6 +120,7 @@ const txnFromRow = (r) => ({
   note: r.note || "",
   fee: { enabled: !!r.fee_enabled, amount: Number(r.fee_amount || 0) },
   date: r.occurred_at,
+  isAdjustment: !!r.is_adjustment,
 });
 const txnToRow = (t) => ({
   type: t.type,
@@ -132,6 +134,7 @@ const txnToRow = (t) => ({
   fee_enabled: t.fee?.enabled || false,
   fee_amount: t.fee?.enabled ? t.fee.amount : 0,
   occurred_at: t.date,
+  is_adjustment: t.isAdjustment || false,
 });
 
 const budgetFromRow = (r) => ({ id: r.id, name: r.name, period: r.period, categoryId: r.category_id || "all", amount: Number(r.amount) });
@@ -158,14 +161,22 @@ function IconCircle({ children, bg, fg }) {
   );
 }
 
+function WaxSeal({ size = 34, children, rotate = -6 }) {
+  return (
+    <div className="wax-seal" style={{ width: size, height: size, fontSize: size * 0.42, transform: `rotate(${rotate}deg)` }}>
+      {children}
+    </div>
+  );
+}
+
 function Modal({ title, onClose, children, wide }) {
   return (
     <div
       className="fixed inset-0 flex items-center justify-center p-4"
-      style={{ background: "rgba(15,20,18,0.55)", zIndex: 50 }}
+      style={{ background: "rgba(20,13,7,0.6)", zIndex: 50 }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="paper-card w-full overflow-y-auto" style={{ maxWidth: wide ? 640 : 460, maxHeight: "88vh", padding: "1.5rem" }}>
+      <div className="paper-card torn-top w-full overflow-y-auto" style={{ maxWidth: wide ? 640 : 460, maxHeight: "88vh", padding: "1.5rem" }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="display-font" style={{ fontSize: 20, color: "var(--ink)" }}>{title}</h3>
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
@@ -183,6 +194,10 @@ function Field({ label, children }) {
       {children}
     </label>
   );
+}
+
+function SectionTitle({ children }) {
+  return <h2 className="display-font ledger-title" style={{ fontSize: 24 }}>{children}</h2>;
 }
 
 function TypePill({ type }) {
@@ -267,6 +282,9 @@ export default function BudgetTracker({ session }) {
   const [theme, setTheme] = useState(() => (typeof window !== "undefined" && localStorage.getItem("ledger-theme")) || "dark");
   useEffect(() => { localStorage.setItem("ledger-theme", theme); }, [theme]);
 
+  const [hideAmounts, setHideAmounts] = useState(() => (typeof window !== "undefined" && localStorage.getItem("ledger-hide-amounts") === "1"));
+  useEffect(() => { localStorage.setItem("ledger-hide-amounts", hideAmounts ? "1" : "0"); }, [hideAmounts]);
+
   const [tab, setTab] = useState("dashboard");
   const [txnModal, setTxnModal] = useState(null);
   const [accModal, setAccModal] = useState(null);
@@ -274,6 +292,7 @@ export default function BudgetTracker({ session }) {
   const [budgetModal, setBudgetModal] = useState(null);
   const [goalModal, setGoalModal] = useState(null);
   const [contributeGoal, setContributeGoal] = useState(null);
+  const [adjustAccount, setAdjustAccount] = useState(null);
 
   /* ---------------- initial load ---------------- */
 
@@ -331,6 +350,7 @@ export default function BudgetTracker({ session }) {
     cutoff.setDate(cutoff.getDate() - days);
     let inc = 0, exp = 0;
     for (const t of transactions) {
+      if (t.isAdjustment) continue;
       if (new Date(t.date) < cutoff) continue;
       if (t.type === "income") inc += t.amount;
       if (t.type === "expense") exp += t.amount;
@@ -347,7 +367,7 @@ export default function BudgetTracker({ session }) {
       const d = new Date();
       d.setHours(0, 0, 0, 0);
       d.setDate(d.getDate() - i);
-      buckets.push({ date: d, income: 0, expense: 0 });
+      buckets.push({ date: d, income: 0, expense: 0, netDelta: 0 });
     }
     const dayIndex = (iso) => {
       const d = new Date(iso);
@@ -357,14 +377,21 @@ export default function BudgetTracker({ session }) {
     for (const t of transactions) {
       const idx = dayIndex(t.date);
       if (idx === -1) continue;
-      if (t.type === "income") buckets[idx].income += t.amount;
-      if (t.type === "expense") buckets[idx].expense += t.amount;
+      if (t.type === "income") {
+        buckets[idx].netDelta += t.amount;
+        if (!t.isAdjustment) buckets[idx].income += t.amount;
+      }
+      if (t.type === "expense") {
+        buckets[idx].netDelta -= t.amount;
+        if (!t.isAdjustment) buckets[idx].expense += t.amount;
+      }
+      if (t.type === "transfer" && t.fee?.enabled) buckets[idx].netDelta -= t.fee.amount;
     }
     let runningDelta = 0;
     const withNet = buckets.map((b) => ({ ...b }));
     for (let i = withNet.length - 1; i >= 0; i--) {
       withNet[i].netWorth = base - runningDelta;
-      runningDelta += withNet[i].income - withNet[i].expense;
+      runningDelta += withNet[i].netDelta;
     }
     return withNet.map((b) => ({
       label: fmtDay(b.date),
@@ -378,7 +405,7 @@ export default function BudgetTracker({ session }) {
     const cutoff = startOfPeriod("monthly");
     const totals = {};
     for (const t of transactions) {
-      if (t.type !== "expense") continue;
+      if (t.type !== "expense" || t.isAdjustment) continue;
       if (new Date(t.date) < cutoff) continue;
       totals[t.categoryId] = (totals[t.categoryId] || 0) + t.amount;
     }
@@ -395,7 +422,7 @@ export default function BudgetTracker({ session }) {
       const periodStart = startOfPeriod(b.period);
       const spent = transactions
         .filter((t) => {
-          if (t.type !== "expense" || new Date(t.date) < periodStart) return false;
+          if (t.type !== "expense" || t.isAdjustment || new Date(t.date) < periodStart) return false;
           if (t.budgetId) return t.budgetId === b.id;
           return b.categoryId === "all" || t.categoryId === b.categoryId;
         })
@@ -454,6 +481,27 @@ export default function BudgetTracker({ session }) {
     const { error } = await supabase.from("accounts").delete().eq("id", id);
     if (error) return setErrorMsg(error.message);
     setAccounts((prev) => prev.filter((a) => a.id !== id));
+  };
+  const adjustAccountBalance = async (account, actualStr, note) => {
+    const actual = parseFloat(actualStr);
+    if (!Number.isFinite(actual)) return;
+    const current = accountBalance(account.id);
+    const diff = Math.round((actual - current) * 100) / 100;
+    if (diff === 0) { setAdjustAccount(null); return; }
+    const row = txnToRow({
+      type: diff > 0 ? "income" : "expense",
+      amount: Math.abs(diff),
+      accountId: account.id,
+      categoryId: null,
+      budgetId: null,
+      note: note || "Balance adjustment",
+      date: new Date().toISOString(),
+      isAdjustment: true,
+    });
+    const { data, error } = await supabase.from("transactions").insert(row).select().single();
+    if (error) return setErrorMsg(error.message);
+    setTransactions((prev) => [txnFromRow(data), ...prev]);
+    setAdjustAccount(null);
   };
 
   const upsertCategory = async (cat) => {
@@ -540,61 +588,100 @@ export default function BudgetTracker({ session }) {
         .bt-root {
           font-family: 'Inter', system-ui, sans-serif;
           min-height: 100vh; padding: 1.25rem;
-          --forest: #3E6B4F; --forest-100: #E3EDE5; --forest-800: #1E3D2A;
-          --rust: #9A3324; --rust-100: #F3E1DB; --rust-800: #5C1E15;
-          --slate: #55696B; --slate-100: #E4EAEA; --slate-800: #2C3839;
-          --brass: #C08829; --brass-100: #F6E9D1; --brass-800: #6E4C15;
-          --ink: #1B2521; --ink-soft: #4A4438; --paper-dim: #ECE4CF;
+          --forest: #5C7A52; --forest-100: #E4EAE0; --forest-800: #33452C;
+          --rust: #A13A1F; --rust-100: #F2E0D6; --rust-800: #5C2010;
+          --slate: #6E5A47; --slate-100: #EAE2D6; --slate-800: #3E3020;
+          --brass: #B8842A; --brass-100: #F5E7C9; --brass-800: #6B4C15;
+          --wax: #7A1F1F; --wax-ink: #F4E9D0;
+          --ink: #2B1B0E; --ink-soft: #6B4A2E; --paper-dim: #EADFC4;
         }
         .bt-root[data-theme="dark"] {
-          --bg: #1B2521; --fg: #F6F1E4; --card-bg: #F6F1E4; --card-border: rgba(27,37,33,0.15);
-          --muted: rgba(246,241,228,0.55); --muted-strong: rgba(246,241,228,0.75);
-          --sidebar-active-bg: rgba(246,241,228,0.1); --metric-bg: rgba(246,241,228,0.06); --metric-border: rgba(246,241,228,0.12);
+          --bg: #241A12; --fg: #F4E9D0; --card-bg: #F4E9D0; --card-border: rgba(43,27,14,0.18);
+          --muted: rgba(244,233,208,0.55); --muted-strong: rgba(244,233,208,0.75);
+          --sidebar-active-bg: rgba(244,233,208,0.1); --metric-bg: rgba(244,233,208,0.06); --metric-border: rgba(244,233,208,0.14);
         }
         .bt-root[data-theme="light"] {
-          --bg: #EFEADB; --fg: #1B2521; --card-bg: #FFFFFF; --card-border: rgba(27,37,33,0.12);
-          --muted: rgba(27,37,33,0.55); --muted-strong: rgba(27,37,33,0.72);
-          --sidebar-active-bg: rgba(27,37,33,0.07); --metric-bg: rgba(27,37,33,0.035); --metric-border: rgba(27,37,33,0.1);
+          --bg: #E9DCBD; --fg: #2B1B0E; --card-bg: #FFFBF0; --card-border: rgba(43,27,14,0.14);
+          --muted: rgba(43,27,14,0.55); --muted-strong: rgba(43,27,14,0.72);
+          --sidebar-active-bg: rgba(43,27,14,0.08); --metric-bg: rgba(43,27,14,0.04); --metric-border: rgba(43,27,14,0.12);
         }
-        .bt-root { background: var(--bg); color: var(--fg); }
+        .bt-root {
+          background-color: var(--bg); color: var(--fg);
+          background-image: radial-gradient(rgba(0,0,0,0.06) 1px, transparent 1.4px);
+          background-size: 3px 3px;
+        }
         .bt-root * { box-sizing: border-box; }
         .display-font { font-family: 'Fraunces', Georgia, serif; }
         .mono-font { font-family: 'IBM Plex Mono', monospace; }
-        .paper-card { background: var(--card-bg); color: var(--ink); border-radius: 10px; box-shadow: 0 1px 0 rgba(0,0,0,0.06); }
+        .ledger-title { display: inline-block; padding-bottom: 6px; border-bottom: 3px double var(--muted-strong); margin-bottom: 18px; }
+        .paper-card {
+          background-color: var(--card-bg); color: var(--ink); border-radius: 8px;
+          background-image: radial-gradient(rgba(43,27,14,0.035) 1px, transparent 1.4px);
+          background-size: 3px 3px;
+          box-shadow: 0 1px 0 rgba(43,27,14,0.06), 0 10px 22px -16px rgba(43,27,14,0.45), 0 2px 6px -2px rgba(43,27,14,0.15);
+          border: 1px solid var(--card-border);
+        }
+        .torn-top { position: relative; margin-top: 9px; }
+        .torn-top::before {
+          content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px;
+          background:
+            linear-gradient(135deg, var(--card-bg) 25%, transparent 25%) 0 0/14px 14px repeat-x,
+            linear-gradient(225deg, var(--card-bg) 25%, transparent 25%) 0 0/14px 14px repeat-x;
+        }
         .field-label { display:block; font-size: 12px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 4px; }
         input, select, textarea {
-          width: 100%; background: var(--paper-dim); border: 1px solid rgba(27,37,33,0.15);
+          width: 100%; background: var(--paper-dim); border: 1px solid rgba(43,27,14,0.18);
           border-radius: 6px; padding: 8px 10px; font-size: 14px; color: var(--ink); font-family: inherit;
         }
         input:focus, select:focus, textarea:focus { outline: 2px solid var(--forest); outline-offset: 1px; }
         .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: transform 0.06s ease; }
         .btn:active { transform: scale(0.97); }
-        .btn-primary { background: var(--forest); color: #EFF6EF; }
-        .btn-outline-dark { background: transparent; border-color: rgba(27,37,33,0.25); color: var(--ink); }
-        .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; border: 1px solid rgba(27,37,33,0.15); background: transparent; color: var(--ink-soft); cursor: pointer; }
-        .icon-btn:hover { background: rgba(27,37,33,0.06); }
+        .btn-primary { background: var(--forest); color: #F3F5EF; box-shadow: 0 3px 0 var(--forest-800); }
+        .btn-primary:active { box-shadow: 0 1px 0 var(--forest-800); }
+        .btn-outline-dark { background: transparent; border-color: rgba(43,27,14,0.3); color: var(--ink); }
+        .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; border: 1px solid rgba(43,27,14,0.18); background: transparent; color: var(--ink-soft); cursor: pointer; }
+        .icon-btn:hover { background: rgba(43,27,14,0.07); }
         .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
-        .tag-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(27,37,33,0.08); color: var(--ink-soft); padding: 2px 8px; border-radius: 999px; font-size: 11px; }
+        .tag-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(43,27,14,0.08); color: var(--ink-soft); padding: 2px 8px; border-radius: 999px; font-size: 11px; }
+        .stamp {
+          display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px;
+          border: 1.5px solid var(--rust); border-radius: 4px; color: var(--rust);
+          font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+          transform: rotate(-3deg); font-family: 'Fraunces', serif;
+        }
         .nav-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 8px; border: none; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer; text-align: left; }
         .nav-btn.active { background: var(--sidebar-active-bg); color: var(--fg); }
         .nav-btn:hover:not(.active) { background: var(--sidebar-active-bg); }
-        .receipt-row { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px dashed rgba(27,37,33,0.18); }
+        .receipt-row { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px dashed rgba(43,27,14,0.2); }
         .receipt-row:last-child { border-bottom: none; }
-        .progress-track { height: 8px; border-radius: 999px; background: rgba(27,37,33,0.1); overflow: hidden; }
+        .receipt-row-click { cursor: pointer; border-radius: 6px; }
+        .receipt-row-click:hover { background: rgba(43,27,14,0.05); }
+        .progress-track { height: 8px; border-radius: 999px; background: rgba(43,27,14,0.12); overflow: hidden; }
         .progress-fill { height: 100%; border-radius: 999px; }
-        .metric-card { background: var(--metric-bg); border: 1px solid var(--metric-border); border-radius: 10px; padding: 14px 16px; }
+        .metric-card { background: var(--metric-bg); border: 1px solid var(--metric-border); border-radius: 8px; padding: 14px 16px; position: relative; }
+        .metric-hero { grid-column: span 1; }
         .theme-toggle { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:8px; border:1px solid var(--metric-border); background: var(--metric-bg); color: var(--fg); cursor:pointer; }
-        .icon-grid { display:grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-height: 160px; overflow-y:auto; padding: 4px; background: rgba(27,37,33,0.04); border-radius: 8px; }
+        .icon-grid { display:grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-height: 160px; overflow-y:auto; padding: 4px; background: rgba(43,27,14,0.05); border-radius: 8px; }
         .icon-swatch { display:flex; align-items:center; justify-content:center; width: 32px; height: 32px; border-radius: 8px; border: 2px solid transparent; background: var(--paper-dim); cursor:pointer; color: var(--ink-soft); }
         .icon-swatch.selected { border-color: var(--forest); background: var(--forest-100); color: var(--forest-800); }
-        .calc-popup { margin-top: 8px; background: rgba(27,37,33,0.04); border: 1px solid rgba(27,37,33,0.12); border-radius: 8px; padding: 8px; }
+        .calc-popup { margin-top: 8px; background: rgba(43,27,14,0.05); border: 1px solid rgba(43,27,14,0.15); border-radius: 8px; padding: 8px; }
         .calc-display { text-align: right; font-size: 18px; padding: 6px 8px; margin-bottom: 6px; color: var(--ink); }
         .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-        .calc-btn { padding: 10px 0; border-radius: 6px; border: 1px solid rgba(27,37,33,0.12); background: #fff; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
+        .calc-btn { padding: 10px 0; border-radius: 6px; border: 1px solid rgba(43,27,14,0.15); background: #FFFCF3; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
         .calc-btn:active { transform: scale(0.95); }
         .calc-eq { background: var(--forest); color: #fff; border-color: var(--forest); }
+        .wax-seal {
+          display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0;
+          background: radial-gradient(circle at 35% 30%, #a23636, var(--wax) 70%);
+          color: var(--wax-ink); font-weight: 700;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.4), inset 0 -2px 3px rgba(0,0,0,0.3), inset 0 2px 2px rgba(255,255,255,0.18);
+          position: relative;
+        }
+        .wax-seal::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px dotted rgba(244,233,208,0.4); }
+        .goal-badge { position: absolute; top: -12px; right: -8px; z-index: 2; }
+        .privacy-toggle { display:flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:8px; border:1px solid var(--metric-border); background: var(--metric-bg); color: var(--fg); cursor:pointer; }
         @media (min-width: 768px) { .bt-layout { display: grid; grid-template-columns: 200px 1fr; gap: 1.5rem; } }
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
       `}</style>
 
       {errorMsg && (
@@ -609,9 +696,7 @@ export default function BudgetTracker({ session }) {
         <div>
           <div className="flex items-center justify-between mb-5 px-1">
             <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center rounded-full" style={{ width: 30, height: 30, background: "var(--brass)", color: "#3A2A08" }}>
-                <Wallet size={16} />
-              </div>
+              <WaxSeal size={32} rotate={-8}><Wallet size={15} /></WaxSeal>
               <span className="display-font" style={{ fontSize: 18, fontWeight: 600 }}>Ledger</span>
             </div>
             <div className="flex items-center gap-1">
@@ -658,7 +743,8 @@ export default function BudgetTracker({ session }) {
                   dailySeries={dailySeries} categoryBreakdown={categoryBreakdown} budgetProgress={budgetProgress}
                   goalsWithProgress={goalsWithProgress} sortedTransactions={sortedTransactions}
                   accountName={accountName} categoryName={categoryName} categoryIcon={categoryIcon}
-                  onNewTxn={() => setTxnModal("new")}
+                  onNewTxn={() => setTxnModal("new")} onEditTxn={(t) => setTxnModal(t)}
+                  hideAmounts={hideAmounts} onToggleHide={() => setHideAmounts((h) => !h)}
                 />
               )}
               {tab === "transactions" && (
@@ -669,7 +755,10 @@ export default function BudgetTracker({ session }) {
                 />
               )}
               {tab === "accounts" && (
-                <AccountsView accounts={accountsWithBalance} onNew={() => setAccModal("new")} onEdit={(a) => setAccModal(a)} onDelete={deleteAccount} netWorth={netWorth} />
+                <AccountsView
+                  accounts={accountsWithBalance} onNew={() => setAccModal("new")} onEdit={(a) => setAccModal(a)}
+                  onDelete={deleteAccount} onAdjust={(a) => setAdjustAccount(a)} netWorth={netWorth}
+                />
               )}
               {tab === "categories" && (
                 <CategoriesView categories={categories} transactions={transactions} onNew={() => setCatModal("new")} onEdit={(c) => setCatModal(c)} onDelete={deleteCategory} />
@@ -707,6 +796,12 @@ export default function BudgetTracker({ session }) {
       {contributeGoal && (
         <ContributeForm goal={contributeGoal} onCancel={() => setContributeGoal(null)} onSave={contributeToGoal} />
       )}
+      {adjustAccount && (
+        <AdjustBalanceForm
+          account={adjustAccount} currentBalance={accountBalance(adjustAccount.id)}
+          onCancel={() => setAdjustAccount(null)} onSave={adjustAccountBalance}
+        />
+      )}
     </div>
   );
 }
@@ -717,60 +812,80 @@ export default function BudgetTracker({ session }) {
 
 function DashboardView({
   netWorth, monthTotals, accountsWithBalance, dailySeries, categoryBreakdown, budgetProgress,
-  goalsWithProgress, sortedTransactions, accountName, categoryName, categoryIcon, onNewTxn,
+  goalsWithProgress, sortedTransactions, accountName, categoryName, categoryIcon, onNewTxn, onEditTxn,
+  hideAmounts, onToggleHide,
 }) {
   const totalSaved = goalsWithProgress.reduce((s, g) => s + g.saved, 0);
   const totalTarget = goalsWithProgress.reduce((s, g) => s + g.targetAmount, 0);
+  const show = (v) => (hideAmounts ? MASK : fmtMoney(v));
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="display-font" style={{ fontSize: 24 }}>Dashboard</h2>
-        <button className="btn btn-primary" onClick={onNewTxn}><Plus size={16} /> Log entry</button>
+        <SectionTitle>Dashboard</SectionTitle>
+        <div className="flex items-center gap-2">
+          <button className="privacy-toggle" onClick={onToggleHide} aria-label={hideAmounts ? "Show amounts" : "Hide amounts"} title={hideAmounts ? "Show amounts" : "Hide amounts"}>
+            {hideAmounts ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+          <button className="btn btn-primary" onClick={onNewTxn}><Plus size={16} /> Log entry</button>
+        </div>
       </div>
 
       <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
         <div className="metric-card">
           <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Net worth</div>
-          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600 }}>{fmtMoney(netWorth)}</div>
+          <div className="display-font mono-font" style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.01em" }}>{show(netWorth)}</div>
         </div>
         <div className="metric-card">
           <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Income (30d)</div>
-          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#3E6B4F" }}>{fmtMoney(monthTotals.inc)}</div>
+          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#6E9161" }}>{show(monthTotals.inc)}</div>
         </div>
         <div className="metric-card">
           <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Expenses (30d)</div>
-          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#9A3324" }}>{fmtMoney(monthTotals.exp)}</div>
+          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#C1552F" }}>{show(monthTotals.exp)}</div>
         </div>
         {goalsWithProgress.length > 0 ? (
           <div className="metric-card">
             <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Total saved</div>
-            <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#C08829" }}>{fmtMoney(totalSaved)}</div>
-            <div style={{ fontSize: 10, color: "var(--muted)" }}>of {fmtMoney(totalTarget)} goal</div>
+            <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#D19A3D" }}>{show(totalSaved)}</div>
+            <div style={{ fontSize: 10, color: "var(--muted)" }}>{hideAmounts ? "goal hidden" : `of ${fmtMoney(totalTarget)} goal`}</div>
           </div>
         ) : (
           <div className="metric-card">
             <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Net (30d)</div>
-            <div className="mono-font" style={{ fontSize: 22, fontWeight: 600 }}>{fmtMoney(monthTotals.inc - monthTotals.exp)}</div>
+            <div className="mono-font" style={{ fontSize: 22, fontWeight: 600 }}>{show(monthTotals.inc - monthTotals.exp)}</div>
           </div>
         )}
       </div>
 
-      <div className="paper-card p-4 mb-4">
+      <div className="paper-card torn-top p-4 mb-4">
+        <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--ink-soft)" }}>Accounts overview</h3>
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
+          {accountsWithBalance.map((a) => (
+            <div key={a.id} style={{ borderLeft: `3px solid ${a.color}`, paddingLeft: 10 }}>
+              <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{a.name}</div>
+              <div className="mono-font" style={{ fontSize: 16, fontWeight: 600 }}>{hideAmounts ? MASK : fmtMoney(a.balance)}</div>
+            </div>
+          ))}
+          {accountsWithBalance.length === 0 && <p style={{ fontSize: 12, color: "var(--ink-soft)" }}>Add an account to get started.</p>}
+        </div>
+      </div>
+
+      <div className="paper-card torn-top p-4 mb-4">
         <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--ink-soft)" }}>Net worth trend — last 21 days</h3>
         <ResponsiveContainer width="100%" height={220}>
           <AreaChart data={dailySeries}>
             <defs>
               <linearGradient id="nw" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3E6B4F" stopOpacity={0.45} />
-                <stop offset="100%" stopColor="#3E6B4F" stopOpacity={0.02} />
+                <stop offset="0%" stopColor="#5C7A52" stopOpacity={0.5} />
+                <stop offset="100%" stopColor="#5C7A52" stopOpacity={0.03} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(27,37,33,0.1)" />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#4A4438" }} interval={2} />
-            <YAxis tick={{ fontSize: 11, fill: "#4A4438" }} width={70} tickFormatter={(v) => fmtMoney(v)} />
-            <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 6 }} />
-            <Area type="monotone" dataKey="Net worth" stroke="#3E6B4F" fill="url(#nw)" strokeWidth={2} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(43,27,14,0.12)" />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6B4A2E" }} interval={2} />
+            <YAxis tick={{ fontSize: 11, fill: "#6B4A2E" }} width={70} tickFormatter={(v) => (hideAmounts ? "" : fmtMoney(v))} />
+            <Tooltip formatter={(v) => (hideAmounts ? MASK : fmtMoney(v))} contentStyle={{ fontSize: 12, borderRadius: 6 }} />
+            <Area type="monotone" dataKey="Net worth" stroke="#5C7A52" fill="url(#nw)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -780,13 +895,13 @@ function DashboardView({
           <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--ink-soft)" }}>Income vs expense — daily</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailySeries}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(27,37,33,0.1)" />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#4A4438" }} interval={3} />
-              <YAxis tick={{ fontSize: 10, fill: "#4A4438" }} width={60} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(43,27,14,0.12)" />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#6B4A2E" }} interval={3} />
+              <YAxis tick={{ fontSize: 10, fill: "#6B4A2E" }} width={60} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
               <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 6 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="Income" fill="#3E6B4F" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="Expense" fill="#9A3324" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Income" fill="#5C7A52" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Expense" fill="#A13A1F" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -830,45 +945,34 @@ function DashboardView({
 
         <div className="paper-card p-4">
           <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 6, color: "var(--ink-soft)" }}>Recent activity</h3>
+          <p style={{ fontSize: 10, color: "var(--ink-soft)", marginBottom: 4, opacity: 0.8 }}>Tap an entry to edit it</p>
           <div>
             {sortedTransactions.slice(0, 6).map((t) => (
-              <ReceiptRow key={t.id} t={t} accountName={accountName} categoryName={categoryName} categoryIcon={categoryIcon} />
+              <ReceiptRow key={t.id} t={t} accountName={accountName} categoryName={categoryName} categoryIcon={categoryIcon} onClick={onEditTxn} />
             ))}
             {sortedTransactions.length === 0 && <p style={{ fontSize: 12, color: "var(--ink-soft)" }}>Nothing logged yet.</p>}
           </div>
-        </div>
-      </div>
-
-      <div className="paper-card p-4 mt-4">
-        <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--ink-soft)" }}>Accounts overview</h3>
-        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
-          {accountsWithBalance.map((a) => (
-            <div key={a.id} style={{ borderLeft: `3px solid ${a.color}`, paddingLeft: 10 }}>
-              <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{a.name}</div>
-              <div className="mono-font" style={{ fontSize: 16, fontWeight: 600 }}>{fmtMoney(a.balance)}</div>
-            </div>
-          ))}
-          {accountsWithBalance.length === 0 && <p style={{ fontSize: 12, color: "var(--ink-soft)" }}>Add an account to get started.</p>}
         </div>
       </div>
     </div>
   );
 }
 
-function ReceiptRow({ t, accountName, categoryName, categoryIcon }) {
+function ReceiptRow({ t, accountName, categoryName, categoryIcon, onClick }) {
   const isExp = t.type === "expense";
   const isInc = t.type === "income";
+  const isAdj = t.isAdjustment;
   const sign = isExp ? "−" : isInc ? "+" : "";
   const color = isExp ? "var(--rust-800)" : isInc ? "var(--forest-800)" : "var(--slate-800)";
   const label = isExp || isInc ? categoryName(t.categoryId) : `${accountName(t.fromAccountId)} → ${accountName(t.toAccountId)}`;
   return (
-    <div className="receipt-row">
-      <IconCircle bg={isExp ? "var(--rust-100)" : isInc ? "var(--forest-100)" : "var(--slate-100)"} fg={color}>
-        {isExp ? <CategoryIcon name={categoryIcon(t.categoryId)} size={17} /> : isInc ? <ArrowUpCircle size={17} /> : <ArrowLeftRight size={16} />}
+    <div className={`receipt-row ${onClick ? "receipt-row-click" : ""}`} onClick={onClick ? () => onClick(t) : undefined}>
+      <IconCircle bg={isAdj ? "var(--slate-100)" : isExp ? "var(--rust-100)" : isInc ? "var(--forest-100)" : "var(--slate-100)"} fg={color}>
+        {isAdj ? <Scale size={16} /> : isExp ? <CategoryIcon name={categoryIcon(t.categoryId)} size={17} /> : isInc ? <ArrowUpCircle size={17} /> : <ArrowLeftRight size={16} />}
       </IconCircle>
       <div className="flex-1 min-w-0">
         <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.note || label}</div>
-        <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{label} · {fmtDate(t.date)} {fmtTime(t.date)}</div>
+        <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{isAdj ? "Balance adjustment" : label} · {fmtDate(t.date)} {fmtTime(t.date)}</div>
       </div>
       <div className="mono-font" style={{ fontSize: 14, fontWeight: 600, color }}>{sign}{fmtMoney(t.amount)}</div>
     </div>
@@ -894,7 +998,7 @@ function TransactionsView({ transactions, accountName, categoryName, categoryCol
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h2 className="display-font" style={{ fontSize: 24 }}>Transactions</h2>
+        <SectionTitle>Transactions</SectionTitle>
         <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> Log entry</button>
       </div>
 
@@ -915,24 +1019,26 @@ function TransactionsView({ transactions, accountName, categoryName, categoryCol
         </select>
       </div>
 
-      <div className="paper-card">
+      <div className="paper-card torn-top">
         {filtered.length === 0 && <p style={{ padding: 20, fontSize: 13, color: "var(--ink-soft)" }}>Nothing matches yet.</p>}
         <div style={{ padding: "4px 14px" }}>
           {filtered.map((t) => {
             const isExp = t.type === "expense";
             const isInc = t.type === "income";
+            const isAdj = t.isAdjustment;
             const sign = isExp ? "−" : isInc ? "+" : "";
             const color = isExp ? "var(--rust-800)" : isInc ? "var(--forest-800)" : "var(--slate-800)";
             return (
               <div key={t.id} className="receipt-row">
-                <IconCircle bg={isExp ? "var(--rust-100)" : isInc ? "var(--forest-100)" : "var(--slate-100)"} fg={color}>
-                  {isExp ? <CategoryIcon name={categoryIcon(t.categoryId)} size={17} /> : isInc ? <ArrowUpCircle size={17} /> : <ArrowLeftRight size={16} />}
+                <IconCircle bg={isAdj ? "var(--slate-100)" : isExp ? "var(--rust-100)" : isInc ? "var(--forest-100)" : "var(--slate-100)"} fg={color}>
+                  {isAdj ? <Scale size={16} /> : isExp ? <CategoryIcon name={categoryIcon(t.categoryId)} size={17} /> : isInc ? <ArrowUpCircle size={17} /> : <ArrowLeftRight size={16} />}
                 </IconCircle>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span style={{ fontSize: 13, fontWeight: 600 }}>{t.note || "(no note)"}</span>
                     <TypePill type={t.type} />
-                    {(isExp || isInc) && (
+                    {isAdj && <span className="stamp">Reconciled</span>}
+                    {(isExp || isInc) && !isAdj && (
                       <span className="tag-chip" style={{ background: `${categoryColor(t.categoryId)}22`, color: categoryColor(t.categoryId) }}>
                         <CategoryIcon name={categoryIcon(t.categoryId)} size={10} />{categoryName(t.categoryId)}
                       </span>
@@ -962,16 +1068,16 @@ function TransactionsView({ transactions, accountName, categoryName, categoryCol
 /* Accounts                                                             */
 /* ------------------------------------------------------------------ */
 
-function AccountsView({ accounts, onNew, onEdit, onDelete, netWorth }) {
+function AccountsView({ accounts, onNew, onEdit, onDelete, onAdjust, netWorth }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="display-font" style={{ fontSize: 24 }}>Accounts</h2>
+        <SectionTitle>Accounts</SectionTitle>
         <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> New account</button>
       </div>
-      <div className="paper-card p-4 mb-4">
+      <div className="paper-card torn-top p-4 mb-4">
         <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>Total net worth across all accounts</div>
-        <div className="mono-font" style={{ fontSize: 26, fontWeight: 600 }}>{fmtMoney(netWorth)}</div>
+        <div className="display-font mono-font" style={{ fontSize: 28, fontWeight: 700 }}>{fmtMoney(netWorth)}</div>
       </div>
       <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
         {accounts.map((a) => (
@@ -982,6 +1088,7 @@ function AccountsView({ accounts, onNew, onEdit, onDelete, netWorth }) {
                 <div style={{ fontSize: 11, color: "var(--ink-soft)", textTransform: "capitalize" }}>{a.type}</div>
               </div>
               <div className="flex gap-1">
+                <button className="icon-btn" onClick={() => onAdjust(a)} aria-label="Adjust balance" title="Adjust balance"><Scale size={14} /></button>
                 <button className="icon-btn" onClick={() => onEdit(a)} aria-label="Edit"><Pencil size={14} /></button>
                 <button className="icon-btn" onClick={() => onDelete(a.id)} aria-label="Delete"><Trash2 size={14} /></button>
               </div>
@@ -1006,11 +1113,11 @@ function CategoriesView({ categories, transactions, onNew, onEdit, onDelete }) {
   const incomeCats = categories.filter((c) => c.type === "income");
 
   const Group = ({ title, list }) => (
-    <div className="paper-card p-4 mb-4">
+    <div className="paper-card torn-top p-4 mb-4">
       <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--ink-soft)" }}>{title}</h3>
       <div className="flex flex-col gap-2">
         {list.map((c) => (
-          <div key={c.id} className="flex items-center justify-between" style={{ padding: "6px 0", borderBottom: "1px dashed rgba(27,37,33,0.15)" }}>
+          <div key={c.id} className="flex items-center justify-between" style={{ padding: "6px 0", borderBottom: "1px dashed rgba(43,27,14,0.2)" }}>
             <div className="flex items-center gap-2">
               <span className="flex items-center justify-center rounded-full" style={{ width: 24, height: 24, background: `${c.color}22`, color: c.color }}>
                 <CategoryIcon name={c.icon} size={13} />
@@ -1032,7 +1139,7 @@ function CategoriesView({ categories, transactions, onNew, onEdit, onDelete }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="display-font" style={{ fontSize: 24 }}>Categories</h2>
+        <SectionTitle>Categories</SectionTitle>
         <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> New category</button>
       </div>
       <Group title="Expense categories" list={expenseCats} />
@@ -1049,7 +1156,7 @@ function BudgetsView({ budgetProgress, categoryName, onNew, onEdit, onDelete }) 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="display-font" style={{ fontSize: 24 }}>Budgets</h2>
+        <SectionTitle>Budgets</SectionTitle>
         <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> New budget</button>
       </div>
       <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
@@ -1088,12 +1195,17 @@ function SavingsView({ goalsWithProgress, accountName, onNew, onEdit, onDelete, 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="display-font" style={{ fontSize: 24 }}>Savings</h2>
+        <SectionTitle>Savings</SectionTitle>
         <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> New goal</button>
       </div>
       <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
         {goalsWithProgress.map((g) => (
-          <div key={g.id} className="paper-card p-4" style={{ borderTop: `4px solid ${g.color}` }}>
+          <div key={g.id} className="paper-card p-4" style={{ borderTop: `4px solid ${g.color}`, position: "relative", overflow: "visible" }}>
+            {g.pct >= 100 && (
+              <div className="goal-badge">
+                <WaxSeal size={46} rotate={-10}>✓</WaxSeal>
+              </div>
+            )}
             <div className="flex items-start justify-between mb-2">
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{g.name}</div>
@@ -1136,6 +1248,7 @@ function SavingsView({ goalsWithProgress, accountName, onNew, onEdit, onDelete, 
 /* ------------------------------------------------------------------ */
 
 function TransactionForm({ initial, accounts, categories, budgets, onCancel, onSave }) {
+  const isAdjustment = initial?.isAdjustment || false;
   const [type, setType] = useState(initial?.type || "expense");
   const [amount, setAmount] = useState(initial?.amount ?? "");
   const [accountId, setAccountId] = useState(initial?.accountId || accounts[0]?.id || "");
@@ -1150,7 +1263,7 @@ function TransactionForm({ initial, accounts, categories, budgets, onCancel, onS
 
   const relevantCats = categories.filter((c) => c.type === type);
   useEffect(() => {
-    if (type !== "transfer" && relevantCats.length && !relevantCats.some((c) => c.id === categoryId)) {
+    if (!isAdjustment && type !== "transfer" && relevantCats.length && !relevantCats.some((c) => c.id === categoryId)) {
       setCategoryId(relevantCats[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1160,20 +1273,29 @@ function TransactionForm({ initial, accounts, categories, budgets, onCancel, onS
     e.preventDefault();
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return;
-    const base = { id: initial?.id, type, amount: amt, note, date: initial?.date || new Date().toISOString() };
+    const base = { id: initial?.id, type, amount: amt, note, date: initial?.date || new Date().toISOString(), isAdjustment };
     setSaving(true);
     if (type === "transfer") {
       if (fromAccountId === toAccountId) { setSaving(false); return; }
       await onSave({ ...base, fromAccountId, toAccountId, fee: { enabled: feeEnabled, amount: feeEnabled ? parseFloat(feeAmount) || 0 : 0 } });
     } else {
-      await onSave({ ...base, accountId, categoryId, budgetId: type === "expense" ? budgetId || null : null });
+      await onSave({
+        ...base, accountId,
+        categoryId: isAdjustment ? null : categoryId,
+        budgetId: isAdjustment ? null : (type === "expense" ? budgetId || null : null),
+      });
     }
     setSaving(false);
   };
 
   return (
-    <Modal title={initial ? "Edit entry" : "Log a new entry"} onClose={onCancel}>
+    <Modal title={isAdjustment ? "Edit balance adjustment" : initial ? "Edit entry" : "Log a new entry"} onClose={onCancel}>
       <form onSubmit={submit}>
+        {isAdjustment && (
+          <p style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+            <Scale size={13} /> This entry reconciles your logged balance with a real-world amount.
+          </p>
+        )}
         <Field label="Entry type">
           <div className="flex gap-2">
             {["expense", "income", "transfer"].map((t) => (
@@ -1181,6 +1303,7 @@ function TransactionForm({ initial, accounts, categories, budgets, onCancel, onS
                 type="button" key={t} className="btn"
                 style={{ flex: 1, justifyContent: "center", background: type === t ? (t === "expense" ? "var(--rust)" : t === "income" ? "var(--forest)" : "var(--slate)") : "var(--paper-dim)", color: type === t ? "#fff" : "var(--ink-soft)" }}
                 onClick={() => setType(t)}
+                disabled={isAdjustment && t === "transfer"}
               >
                 {t === "expense" ? "Expense" : t === "income" ? "Income" : "Transfer"}
               </button>
@@ -1199,19 +1322,23 @@ function TransactionForm({ initial, accounts, categories, budgets, onCancel, onS
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </Field>
-            <Field label="Category">
-              <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                {relevantCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                {relevantCats.length === 0 && <option value="">No categories — add one first</option>}
-              </select>
-            </Field>
-            {type === "expense" && (
-              <Field label="Assign to a budget">
-                <select value={budgetId} onChange={(e) => setBudgetId(e.target.value)}>
-                  <option value="">Auto (match by category)</option>
-                  {budgets.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.period})</option>)}
-                </select>
-              </Field>
+            {!isAdjustment && (
+              <>
+                <Field label="Category">
+                  <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                    {relevantCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {relevantCats.length === 0 && <option value="">No categories — add one first</option>}
+                  </select>
+                </Field>
+                {type === "expense" && (
+                  <Field label="Assign to a budget">
+                    <select value={budgetId} onChange={(e) => setBudgetId(e.target.value)}>
+                      <option value="">Auto (match by category)</option>
+                      {budgets.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.period})</option>)}
+                    </select>
+                  </Field>
+                )}
+              </>
             )}
           </>
         ) : (
@@ -1493,6 +1620,50 @@ function ContributeForm({ goal, onCancel, onSave }) {
         <div className="flex justify-end gap-2 mt-4">
           <button type="button" className="btn btn-outline-dark" onClick={onCancel}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : "Update"}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function AdjustBalanceForm({ account, currentBalance, onCancel, onSave }) {
+  const [actual, setActual] = useState(String(Math.round(currentBalance * 100) / 100));
+  const [note, setNote] = useState("Balance adjustment");
+  const [saving, setSaving] = useState(false);
+
+  const diff = (parseFloat(actual) || 0) - currentBalance;
+  const meaningfulDiff = Math.abs(diff) > 0.004;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave(account, actual, note);
+    setSaving(false);
+  };
+
+  return (
+    <Modal title={`Adjust "${account.name}"`} onClose={onCancel}>
+      <form onSubmit={submit}>
+        <p style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>
+          Use this when your logged balance doesn't match what your bank or wallet actually shows —
+          for example, if you forgot to log something. It creates a dated adjustment entry so your
+          history stays traceable, instead of silently editing the past.
+        </p>
+        <Field label="Currently tracked balance">
+          <p className="mono-font" style={{ fontSize: 16, fontWeight: 600 }}>{fmtMoney(currentBalance)}</p>
+        </Field>
+        <Field label="Actual balance right now">
+          <AmountInput value={actual} onChange={setActual} required />
+        </Field>
+        {meaningfulDiff && (
+          <p style={{ fontSize: 12, color: diff > 0 ? "var(--forest)" : "var(--rust)", marginTop: -8, marginBottom: 10 }}>
+            This will log {diff > 0 ? "an income" : "an expense"} adjustment of {fmtMoney(Math.abs(diff))}.
+          </p>
+        )}
+        <Field label="Note"><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+        <div className="flex justify-end gap-2 mt-4">
+          <button type="button" className="btn btn-outline-dark" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={saving || !meaningfulDiff}>{saving ? "Saving…" : "Save adjustment"}</button>
         </div>
       </form>
     </Modal>
