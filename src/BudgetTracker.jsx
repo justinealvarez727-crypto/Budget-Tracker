@@ -6,7 +6,7 @@ import {
 import {
   Plus, Trash2, Pencil, X, ArrowLeftRight, Wallet, LayoutDashboard,
   ListOrdered, FolderTree, Target, Check, Landmark, ArrowUpCircle,
-  LogOut, Calculator, Sun, Moon, Search, PiggyBank, Scale, Eye, EyeOff,
+  LogOut, Calculator, Sun, Moon, Search, PiggyBank, Scale, Eye, EyeOff, CreditCard,
   ShoppingCart, Utensils, Car, Home, Zap, Heart, Gift, Plane, BookOpen,
   Gamepad2, Smartphone, Wifi, Coffee, Dumbbell, Baby, PawPrint, Briefcase,
   GraduationCap, Music, Film, Bus, Fuel, ShoppingBag, Pill, Shirt,
@@ -117,6 +117,7 @@ const txnFromRow = (r) => ({
   toAccountId: r.to_account_id,
   categoryId: r.category_id,
   budgetId: r.budget_id || null,
+  debtId: r.debt_id || null,
   note: r.note || "",
   fee: { enabled: !!r.fee_enabled, amount: Number(r.fee_amount || 0) },
   date: r.occurred_at,
@@ -130,6 +131,7 @@ const txnToRow = (t) => ({
   to_account_id: t.toAccountId || null,
   category_id: t.categoryId || null,
   budget_id: t.budgetId || null,
+  debt_id: t.debtId || null,
   note: t.note || "",
   fee_enabled: t.fee?.enabled || false,
   fee_amount: t.fee?.enabled ? t.fee.amount : 0,
@@ -147,6 +149,13 @@ const goalFromRow = (r) => ({
 const goalToRow = (g) => ({
   name: g.name, target_amount: g.targetAmount, target_date: g.targetDate || null,
   account_id: g.accountId || null, manual_saved: g.manualSaved ?? 0, color: g.color,
+});
+
+const debtFromRow = (r) => ({
+  id: r.id, name: r.name, totalAmount: Number(r.total_amount), dueDate: r.due_date, color: r.color,
+});
+const debtToRow = (d) => ({
+  name: d.name, total_amount: d.totalAmount, due_date: d.dueDate || null, color: d.color,
 });
 
 /* ------------------------------------------------------------------ */
@@ -276,6 +285,7 @@ export default function BudgetTracker({ session }) {
   const [transactions, setTransactions] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [goals, setGoals] = useState([]);
+  const [debts, setDebts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
 
@@ -293,6 +303,7 @@ export default function BudgetTracker({ session }) {
   const [goalModal, setGoalModal] = useState(null);
   const [contributeGoal, setContributeGoal] = useState(null);
   const [adjustAccount, setAdjustAccount] = useState(null);
+  const [debtModal, setDebtModal] = useState(null);
 
   /* ---------------- initial load ---------------- */
 
@@ -301,15 +312,16 @@ export default function BudgetTracker({ session }) {
     (async () => {
       setLoading(true);
       setErrorMsg(null);
-      const [accRes, catRes, txnRes, budRes, goalRes] = await Promise.all([
+      const [accRes, catRes, txnRes, budRes, goalRes, debtRes] = await Promise.all([
         supabase.from("accounts").select("*").order("created_at"),
         supabase.from("categories").select("*").order("created_at"),
         supabase.from("transactions").select("*").order("occurred_at", { ascending: false }),
         supabase.from("budgets").select("*").order("created_at"),
         supabase.from("savings_goals").select("*").order("created_at"),
+        supabase.from("debts").select("*").order("created_at"),
       ]);
       if (cancelled) return;
-      const firstError = accRes.error || catRes.error || txnRes.error || budRes.error || goalRes.error;
+      const firstError = accRes.error || catRes.error || txnRes.error || budRes.error || goalRes.error || debtRes.error;
       if (firstError) {
         setErrorMsg(firstError.message);
         setLoading(false);
@@ -320,6 +332,7 @@ export default function BudgetTracker({ session }) {
       setTransactions((txnRes.data || []).map(txnFromRow));
       setBudgets((budRes.data || []).map(budgetFromRow));
       setGoals((goalRes.data || []).map(goalFromRow));
+      setDebts((debtRes.data || []).map(debtFromRow));
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -438,6 +451,17 @@ export default function BudgetTracker({ session }) {
       return { ...g, saved: clamped, pct: g.targetAmount > 0 ? Math.min(100, (clamped / g.targetAmount) * 100) : 0 };
     });
   }, [goals, accounts, transactions]);
+
+  const debtProgress = useMemo(() => {
+    return debts.map((d) => {
+      const paid = transactions
+        .filter((t) => t.type === "expense" && !t.isAdjustment && t.debtId === d.id)
+        .reduce((s, t) => s + t.amount, 0);
+      const remaining = Math.max(0, d.totalAmount - paid);
+      const pct = d.totalAmount > 0 ? Math.min(100, (paid / d.totalAmount) * 100) : 0;
+      return { ...d, paid, remaining, pct };
+    });
+  }, [debts, transactions]);
 
   const sortedTransactions = useMemo(() => [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)), [transactions]);
 
@@ -568,6 +592,25 @@ export default function BudgetTracker({ session }) {
     setContributeGoal(null);
   };
 
+  const upsertDebt = async (d) => {
+    const row = debtToRow(d);
+    if (d.id && debts.some((x) => x.id === d.id)) {
+      const { data, error } = await supabase.from("debts").update(row).eq("id", d.id).select().single();
+      if (error) return setErrorMsg(error.message);
+      setDebts((prev) => prev.map((x) => (x.id === d.id ? debtFromRow(data) : x)));
+    } else {
+      const { data, error } = await supabase.from("debts").insert(row).select().single();
+      if (error) return setErrorMsg(error.message);
+      setDebts((prev) => [...prev, debtFromRow(data)]);
+    }
+    setDebtModal(null);
+  };
+  const deleteDebt = async (id) => {
+    const { error } = await supabase.from("debts").delete().eq("id", id);
+    if (error) return setErrorMsg(error.message);
+    setDebts((prev) => prev.filter((d) => d.id !== id));
+  };
+
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
   const categoryName = (id) => (id === "all" ? "All categories" : categories.find((c) => c.id === id)?.name || "Uncategorized");
   const categoryColor = (id) => categories.find((c) => c.id === id)?.color || "#888780";
@@ -580,6 +623,7 @@ export default function BudgetTracker({ session }) {
     { id: "categories", label: "Categories", icon: FolderTree },
     { id: "budgets", label: "Budgets", icon: Target },
     { id: "savings", label: "Savings", icon: PiggyBank },
+    { id: "debts", label: "Debts", icon: CreditCard },
   ];
 
   return (
@@ -773,6 +817,13 @@ export default function BudgetTracker({ session }) {
                   onContribute={(g) => setContributeGoal(g)}
                 />
               )}
+              {tab === "debts" && (
+                <DebtsView
+                  debtProgress={debtProgress}
+                  onNew={() => setDebtModal("new")} onEdit={(d) => setDebtModal(d)} onDelete={deleteDebt}
+                  onLogPayment={(d) => setTxnModal({ type: "expense", debtId: d.id })}
+                />
+              )}
             </>
           )}
         </div>
@@ -781,7 +832,7 @@ export default function BudgetTracker({ session }) {
       {txnModal && (
         <TransactionForm
           initial={txnModal === "new" ? null : txnModal}
-          accounts={accounts} categories={categories} budgets={budgets}
+          accounts={accounts} categories={categories} budgets={budgets} debts={debts}
           onCancel={() => setTxnModal(null)} onSave={upsertTransaction}
         />
       )}
@@ -801,6 +852,9 @@ export default function BudgetTracker({ session }) {
           account={adjustAccount} currentBalance={accountBalance(adjustAccount.id)}
           onCancel={() => setAdjustAccount(null)} onSave={adjustAccountBalance}
         />
+      )}
+      {debtModal && (
+        <DebtForm initial={debtModal === "new" ? null : debtModal} onCancel={() => setDebtModal(null)} onSave={upsertDebt} />
       )}
     </div>
   );
@@ -1244,11 +1298,70 @@ function SavingsView({ goalsWithProgress, accountName, onNew, onEdit, onDelete, 
 }
 
 /* ------------------------------------------------------------------ */
+/* Debts — the reverse of Savings: progress fills as the balance shrinks */
+/* ------------------------------------------------------------------ */
+
+function DebtsView({ debtProgress, onNew, onEdit, onDelete, onLogPayment }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <SectionTitle>Debts</SectionTitle>
+        <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> New debt</button>
+      </div>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+        {debtProgress.map((d) => (
+          <div key={d.id} className="paper-card p-4" style={{ borderTop: `4px solid ${d.color}`, position: "relative", overflow: "visible" }}>
+            {d.remaining <= 0 && (
+              <div className="goal-badge">
+                <WaxSeal size={46} rotate={-10}>✓</WaxSeal>
+              </div>
+            )}
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{d.name}</div>
+                <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>
+                  {d.remaining <= 0 ? "Paid off" : "Owed"}{d.dueDate ? ` · due ${fmtDate(d.dueDate)}` : ""}
+                </div>
+              </div>
+              <div className="flex gap-1">
+                <button className="icon-btn" onClick={() => onEdit(d)} aria-label="Edit"><Pencil size={14} /></button>
+                <button className="icon-btn" onClick={() => onDelete(d.id)} aria-label="Delete"><Trash2 size={14} /></button>
+              </div>
+            </div>
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${d.pct}%`, background: d.pct >= 100 ? "var(--forest)" : "var(--rust)" }} />
+            </div>
+            <div className="flex justify-between mt-2 mono-font" style={{ fontSize: 12 }}>
+              <span>{fmtMoney(d.paid)} paid</span>
+              <span style={{ color: "var(--ink-soft)" }}>of {fmtMoney(d.totalAmount)}</span>
+            </div>
+            <div className="mono-font" style={{ fontSize: 16, fontWeight: 700, marginTop: 6, color: d.remaining <= 0 ? "var(--forest-800)" : "var(--rust-800)" }}>
+              {fmtMoney(d.remaining)} remaining
+            </div>
+            {d.remaining > 0 && (
+              <button className="btn btn-outline-dark mt-3" style={{ width: "100%", justifyContent: "center" }} onClick={() => onLogPayment(d)}>
+                <CreditCard size={14} /> Log a payment
+              </button>
+            )}
+          </div>
+        ))}
+        {debtProgress.length === 0 && (
+          <p style={{ fontSize: 13, color: "var(--muted-strong)" }}>
+            No debts tracked yet. Add one, then log payments against it — each payment automatically deducts from what's left.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Forms                                                                */
 /* ------------------------------------------------------------------ */
 
-function TransactionForm({ initial, accounts, categories, budgets, onCancel, onSave }) {
+function TransactionForm({ initial, accounts, categories, budgets, debts, onCancel, onSave }) {
   const isAdjustment = initial?.isAdjustment || false;
+  const isEditing = !!initial?.id;
   const [type, setType] = useState(initial?.type || "expense");
   const [amount, setAmount] = useState(initial?.amount ?? "");
   const [accountId, setAccountId] = useState(initial?.accountId || accounts[0]?.id || "");
@@ -1256,6 +1369,7 @@ function TransactionForm({ initial, accounts, categories, budgets, onCancel, onS
   const [toAccountId, setToAccountId] = useState(initial?.toAccountId || accounts[1]?.id || accounts[0]?.id || "");
   const [categoryId, setCategoryId] = useState(initial?.categoryId || "");
   const [budgetId, setBudgetId] = useState(initial?.budgetId || "");
+  const [debtId, setDebtId] = useState(initial?.debtId || "");
   const [feeEnabled, setFeeEnabled] = useState(initial?.fee?.enabled || false);
   const [feeAmount, setFeeAmount] = useState(initial?.fee?.amount ?? "");
   const [note, setNote] = useState(initial?.note || "");
@@ -1283,13 +1397,14 @@ function TransactionForm({ initial, accounts, categories, budgets, onCancel, onS
         ...base, accountId,
         categoryId: isAdjustment ? null : categoryId,
         budgetId: isAdjustment ? null : (type === "expense" ? budgetId || null : null),
+        debtId: isAdjustment ? null : (type === "expense" ? debtId || null : null),
       });
     }
     setSaving(false);
   };
 
   return (
-    <Modal title={isAdjustment ? "Edit balance adjustment" : initial ? "Edit entry" : "Log a new entry"} onClose={onCancel}>
+    <Modal title={isAdjustment ? "Edit balance adjustment" : isEditing ? "Edit entry" : "Log a new entry"} onClose={onCancel}>
       <form onSubmit={submit}>
         {isAdjustment && (
           <p style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
@@ -1336,6 +1451,15 @@ function TransactionForm({ initial, accounts, categories, budgets, onCancel, onS
                       <option value="">Auto (match by category)</option>
                       {budgets.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.period})</option>)}
                     </select>
+                  </Field>
+                )}
+                {type === "expense" && debts && debts.length > 0 && (
+                  <Field label="Apply to a debt (optional)">
+                    <select value={debtId} onChange={(e) => setDebtId(e.target.value)}>
+                      <option value="">Not a debt payment</option>
+                      {debts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                    {debtId && <p style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: -6 }}>This amount will be deducted from that debt's remaining balance.</p>}
                   </Field>
                 )}
               </>
@@ -1584,6 +1708,51 @@ function GoalForm({ initial, accounts, onCancel, onSave }) {
         <div className="flex justify-end gap-2 mt-4">
           <button type="button" className="btn btn-outline-dark" onClick={onCancel}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : initial ? "Save changes" : "Create goal"}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function DebtForm({ initial, onCancel, onSave }) {
+  const [name, setName] = useState(initial?.name || "");
+  const [totalAmount, setTotalAmount] = useState(initial?.totalAmount ?? "");
+  const [dueDate, setDueDate] = useState(initial?.dueDate ? initial.dueDate.slice(0, 10) : "");
+  const [color, setColor] = useState(initial?.color || PALETTE[Math.floor(Math.random() * PALETTE.length)]);
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const amt = parseFloat(totalAmount);
+    if (!name.trim() || !amt || amt <= 0) return;
+    setSaving(true);
+    await onSave({ id: initial?.id, name: name.trim(), totalAmount: amt, dueDate: dueDate || null, color });
+    setSaving(false);
+  };
+
+  return (
+    <Modal title={initial ? "Edit debt" : "New debt"} onClose={onCancel}>
+      <form onSubmit={submit}>
+        <Field label="Debt name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Credit card, Student loan" required /></Field>
+        <Field label="Total amount owed (PHP)"><AmountInput value={totalAmount} onChange={setTotalAmount} required /></Field>
+        <Field label="Due date (optional)">
+          <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        </Field>
+        <Field label="Color tag">
+          <div className="flex gap-2 flex-wrap">
+            {PALETTE.map((c) => (
+              <button type="button" key={c} onClick={() => setColor(c)} style={{ width: 26, height: 26, borderRadius: "50%", background: c, cursor: "pointer", border: color === c ? "2px solid var(--ink)" : "2px solid transparent" }} aria-label={`Choose color ${c}`} />
+            ))}
+          </div>
+        </Field>
+        <p style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 4 }}>
+          Once created, log payments against this debt from the Debts tab (or by picking it in the
+          "Apply to a debt" field when logging any expense) — each payment automatically reduces
+          what's left.
+        </p>
+        <div className="flex justify-end gap-2 mt-4">
+          <button type="button" className="btn btn-outline-dark" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : initial ? "Save changes" : "Create debt"}</button>
         </div>
       </form>
     </Modal>
