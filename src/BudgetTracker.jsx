@@ -162,14 +162,6 @@ const debtToRow = (d) => ({
 /* Small UI atoms                                                       */
 /* ------------------------------------------------------------------ */
 
-function IconCircle({ children, bg, fg }) {
-  return (
-    <div className="flex items-center justify-center rounded-full flex-shrink-0" style={{ width: 36, height: 36, background: bg, color: fg }}>
-      {children}
-    </div>
-  );
-}
-
 function WaxSeal({ size = 34, children, rotate = -6 }) {
   return (
     <div className="wax-seal" style={{ width: size, height: size, fontSize: size * 0.42, transform: `rotate(${rotate}deg)` }}>
@@ -185,9 +177,9 @@ function Modal({ title, onClose, children, wide }) {
       style={{ background: "rgba(20,13,7,0.6)", zIndex: 50 }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="paper-card torn-top w-full overflow-y-auto" style={{ maxWidth: wide ? 640 : 460, maxHeight: "88vh", padding: "1.5rem" }}>
+      <div className="paper-card w-full overflow-y-auto" style={{ maxWidth: wide ? 640 : 460, maxHeight: "88vh", padding: "1.5rem" }}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="display-font" style={{ fontSize: 20, color: "var(--ink)" }}>{title}</h3>
+          <h3 className="display-font" style={{ fontSize: "var(--fs-xl)", color: "var(--ink)" }}>{title}</h3>
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
         {children}
@@ -206,7 +198,7 @@ function Field({ label, children }) {
 }
 
 function SectionTitle({ children }) {
-  return <h2 className="display-font ledger-title" style={{ fontSize: 24 }}>{children}</h2>;
+  return <h2 className="display-font ledger-title" style={{ fontSize: "var(--fs-2xl)" }}>{children}</h2>;
 }
 
 function TypePill({ type }) {
@@ -638,6 +630,10 @@ export default function BudgetTracker({ session }) {
           --brass: #B8842A; --brass-100: #F5E7C9; --brass-800: #6B4C15;
           --wax: #7A1F1F; --wax-ink: #F4E9D0;
           --ink: #2B1B0E; --ink-soft: #6B4A2E; --paper-dim: #EADFC4;
+          --fs-xs: 11px; --fs-sm: 12px; --fs-base: 13px; --fs-md: 14px;
+          --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 24px; --fs-3xl: 28px;
+          --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+          --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
         }
         .bt-root[data-theme="dark"] {
           --bg: #241A12; --fg: #F4E9D0; --card-bg: #F4E9D0; --card-border: rgba(43,27,14,0.18);
@@ -665,41 +661,47 @@ export default function BudgetTracker({ session }) {
           box-shadow: 0 1px 0 rgba(43,27,14,0.06), 0 10px 22px -16px rgba(43,27,14,0.45), 0 2px 6px -2px rgba(43,27,14,0.15);
           border: 1px solid var(--card-border);
         }
-        .torn-top { position: relative; margin-top: 9px; }
-        .torn-top::before {
-          content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px;
-          background:
-            linear-gradient(135deg, var(--card-bg) 25%, transparent 25%) 0 0/14px 14px repeat-x,
-            linear-gradient(225deg, var(--card-bg) 25%, transparent 25%) 0 0/14px 14px repeat-x;
-        }
-        .field-label { display:block; font-size: 12px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 4px; }
+        .field-label { display:block; font-size: var(--fs-sm); letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 4px; }
         input, select, textarea {
           width: 100%; background: var(--paper-dim); border: 1px solid rgba(43,27,14,0.18);
-          border-radius: 6px; padding: 8px 10px; font-size: 14px; color: var(--ink); font-family: inherit;
+          border-radius: 6px; padding: 8px 10px; font-size: var(--fs-md); color: var(--ink); font-family: inherit;
         }
         input:focus, select:focus, textarea:focus { outline: 2px solid var(--forest); outline-offset: 1px; }
-        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: transform 0.06s ease; }
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 6px; font-size: var(--fs-md); font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: transform 0.06s ease; }
         .btn:active { transform: scale(0.97); }
         .btn-primary { background: var(--forest); color: #F3F5EF; box-shadow: 0 3px 0 var(--forest-800); }
         .btn-primary:active { box-shadow: 0 1px 0 var(--forest-800); }
         .btn-outline-dark { background: transparent; border-color: rgba(43,27,14,0.3); color: var(--ink); }
         .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; border: 1px solid rgba(43,27,14,0.18); background: transparent; color: var(--ink-soft); cursor: pointer; }
         .icon-btn:hover { background: rgba(43,27,14,0.07); }
-        .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
-        .tag-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(43,27,14,0.08); color: var(--ink-soft); padding: 2px 8px; border-radius: 999px; font-size: 11px; }
-        .stamp {
-          display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px;
-          border: 1.5px solid var(--rust); border-radius: 4px; color: var(--rust);
-          font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
-          transform: rotate(-3deg); font-family: 'Fraunces', serif;
-        }
-        .nav-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 8px; border: none; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer; text-align: left; }
+        .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+        .tag-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(43,27,14,0.08); color: var(--ink-soft); padding: 2px 8px; border-radius: 999px; font-size: var(--fs-xs); }
+        .nav-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 8px; border: none; background: transparent; color: var(--muted); font-size: var(--fs-md); font-weight: 600; cursor: pointer; text-align: left; }
         .nav-btn.active { background: var(--sidebar-active-bg); color: var(--fg); }
         .nav-btn:hover:not(.active) { background: var(--sidebar-active-bg); }
-        .receipt-row { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px dashed rgba(43,27,14,0.2); }
-        .receipt-row:last-child { border-bottom: none; }
-        .receipt-row-click { cursor: pointer; border-radius: 6px; }
-        .receipt-row-click:hover { background: rgba(43,27,14,0.05); }
+        .ledger-line { display: flex; align-items: baseline; gap: 8px; padding: 9px 4px; border-bottom: 1px solid rgba(43,27,14,0.13); }
+        .ledger-line:last-child { border-bottom: none; }
+        .ledger-line.clickable { cursor: pointer; border-radius: 6px; }
+        .ledger-line.clickable:hover { background: rgba(43,27,14,0.05); }
+        .ledger-tick { width: 3px; align-self: stretch; border-radius: 2px; flex-shrink: 0; }
+        .ledger-body { flex: 1; min-width: 0; }
+        .ledger-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+        .ledger-title2 { font-size: var(--fs-base); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ledger-amt { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-base); font-weight: 600; flex-shrink: 0; white-space: nowrap; }
+        .ledger-sub { font-size: var(--fs-xs); color: var(--ink-soft); margin-top: 1px; }
+        .ledger-table-wrap { display: none; }
+        table.ledger-reg { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+        table.ledger-reg thead th { text-align: left; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); font-weight: 700; padding: 8px 6px; border-bottom: 2px solid var(--card-border); }
+        table.ledger-reg thead th.num { text-align: right; }
+        table.ledger-reg tbody td { padding: 9px 6px; border-bottom: 1px solid rgba(43,27,14,0.13); vertical-align: top; }
+        table.ledger-reg tbody tr:last-child td { border-bottom: none; }
+        table.ledger-reg tbody tr:hover { background: rgba(43,27,14,0.035); cursor: pointer; }
+        .ledger-reg .col-date { white-space: nowrap; color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-xs); padding-top: 10px; }
+        .ledger-reg .col-desc { font-weight: 600; font-size: var(--fs-base); }
+        .ledger-reg .col-desc .meta { font-weight: 400; font-size: var(--fs-xs); color: var(--ink-soft); display: block; margin-top: 2px; }
+        .ledger-reg .col-num { text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-base); font-weight: 600; white-space: nowrap; padding-top: 10px; }
+        .cat-tick { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+        @media (min-width: 768px) { .ledger-table-wrap { display: block; } .ledger-mobile-wrap { display: none; } }
         .progress-track { height: 8px; border-radius: 999px; background: rgba(43,27,14,0.12); overflow: hidden; }
         .progress-fill { height: 100%; border-radius: 999px; }
         .metric-card { background: var(--metric-bg); border: 1px solid var(--metric-border); border-radius: 8px; padding: 14px 16px; position: relative; }
@@ -709,9 +711,9 @@ export default function BudgetTracker({ session }) {
         .icon-swatch { display:flex; align-items:center; justify-content:center; width: 32px; height: 32px; border-radius: 8px; border: 2px solid transparent; background: var(--paper-dim); cursor:pointer; color: var(--ink-soft); }
         .icon-swatch.selected { border-color: var(--forest); background: var(--forest-100); color: var(--forest-800); }
         .calc-popup { margin-top: 8px; background: rgba(43,27,14,0.05); border: 1px solid rgba(43,27,14,0.15); border-radius: 8px; padding: 8px; }
-        .calc-display { text-align: right; font-size: 18px; padding: 6px 8px; margin-bottom: 6px; color: var(--ink); }
+        .calc-display { text-align: right; font-size: var(--fs-lg); padding: 6px 8px; margin-bottom: 6px; color: var(--ink); }
         .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-        .calc-btn { padding: 10px 0; border-radius: 6px; border: 1px solid rgba(43,27,14,0.15); background: #FFFCF3; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
+        .calc-btn { padding: 10px 0; border-radius: 6px; border: 1px solid rgba(43,27,14,0.15); background: #FFFCF3; font-size: var(--fs-md); font-weight: 600; color: var(--ink); cursor: pointer; }
         .calc-btn:active { transform: scale(0.95); }
         .calc-eq { background: var(--forest); color: #fff; border-color: var(--forest); }
         .wax-seal {
@@ -730,8 +732,8 @@ export default function BudgetTracker({ session }) {
 
       {errorMsg && (
         <div className="paper-card mb-4 p-3" style={{ borderLeft: "4px solid var(--rust)" }}>
-          <strong style={{ fontSize: 13 }}>Something went wrong:</strong>{" "}
-          <span style={{ fontSize: 13 }}>{errorMsg}</span>{" "}
+          <strong style={{ fontSize: "var(--fs-base)" }}>Something went wrong:</strong>{" "}
+          <span style={{ fontSize: "var(--fs-base)" }}>{errorMsg}</span>{" "}
           <button className="icon-btn" style={{ float: "right" }} onClick={() => setErrorMsg(null)} aria-label="Dismiss"><X size={14} /></button>
         </div>
       )}
@@ -741,7 +743,7 @@ export default function BudgetTracker({ session }) {
           <div className="flex items-center justify-between mb-5 px-1">
             <div className="flex items-center gap-2">
               <WaxSeal size={32} rotate={-8}><Wallet size={15} /></WaxSeal>
-              <span className="display-font" style={{ fontSize: 18, fontWeight: 600 }}>Ledger</span>
+              <span className="display-font" style={{ fontSize: "var(--fs-lg)", fontWeight: 600 }}>Ledger</span>
             </div>
             <div className="flex items-center gap-1">
               <button className="theme-toggle" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
@@ -761,15 +763,15 @@ export default function BudgetTracker({ session }) {
             })}
           </nav>
           <div className="hidden md:block mt-6 metric-card">
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)" }}>Net worth</div>
-            <div className="mono-font" style={{ fontSize: 20, fontWeight: 600, marginTop: 4 }}>{fmtMoney(netWorth)}</div>
+            <div style={{ fontSize: "var(--fs-xs)", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)" }}>Net worth</div>
+            <div className="mono-font" style={{ fontSize: "var(--fs-xl)", fontWeight: 600, marginTop: 4 }}>{fmtMoney(netWorth)}</div>
           </div>
-          <div className="hidden md:block mt-4" style={{ fontSize: 12, color: "var(--muted)" }}>
+          <div className="hidden md:block mt-4" style={{ fontSize: "var(--fs-sm)", color: "var(--muted)" }}>
             {session.user.email}
             <button
               onClick={() => supabase.auth.signOut()}
               className="flex items-center gap-1"
-              style={{ marginTop: 6, background: "none", border: "none", color: "var(--muted-strong)", cursor: "pointer", fontSize: 12, padding: 0 }}
+              style={{ marginTop: 6, background: "none", border: "none", color: "var(--muted-strong)", cursor: "pointer", fontSize: "var(--fs-sm)", padding: 0 }}
             >
               <LogOut size={13} /> Sign out
             </button>
@@ -778,7 +780,7 @@ export default function BudgetTracker({ session }) {
 
         <div>
           {loading ? (
-            <p style={{ fontSize: 14, color: "var(--muted-strong)" }}>Loading your data…</p>
+            <p style={{ fontSize: "var(--fs-md)", color: "var(--muted-strong)" }}>Loading your data…</p>
           ) : (
             <>
               {tab === "dashboard" && (
@@ -887,46 +889,46 @@ function DashboardView({
 
       <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
         <div className="metric-card">
-          <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Net worth</div>
-          <div className="display-font mono-font" style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.01em" }}>{show(netWorth)}</div>
+          <div style={{ fontSize: "var(--fs-xs)", textTransform: "uppercase", color: "var(--muted)" }}>Net worth</div>
+          <div className="display-font mono-font" style={{ fontSize: "var(--fs-3xl)", fontWeight: 700, letterSpacing: "-0.01em" }}>{show(netWorth)}</div>
         </div>
         <div className="metric-card">
-          <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Income (30d)</div>
-          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#6E9161" }}>{show(monthTotals.inc)}</div>
+          <div style={{ fontSize: "var(--fs-xs)", textTransform: "uppercase", color: "var(--muted)" }}>Income (30d)</div>
+          <div className="mono-font" style={{ fontSize: "var(--fs-2xl)", fontWeight: 600, color: "#6E9161" }}>{show(monthTotals.inc)}</div>
         </div>
         <div className="metric-card">
-          <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Expenses (30d)</div>
-          <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#C1552F" }}>{show(monthTotals.exp)}</div>
+          <div style={{ fontSize: "var(--fs-xs)", textTransform: "uppercase", color: "var(--muted)" }}>Expenses (30d)</div>
+          <div className="mono-font" style={{ fontSize: "var(--fs-2xl)", fontWeight: 600, color: "#C1552F" }}>{show(monthTotals.exp)}</div>
         </div>
         {goalsWithProgress.length > 0 ? (
           <div className="metric-card">
-            <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Total saved</div>
-            <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, color: "#D19A3D" }}>{show(totalSaved)}</div>
-            <div style={{ fontSize: 10, color: "var(--muted)" }}>{hideAmounts ? "goal hidden" : `of ${fmtMoney(totalTarget)} goal`}</div>
+            <div style={{ fontSize: "var(--fs-xs)", textTransform: "uppercase", color: "var(--muted)" }}>Total saved</div>
+            <div className="mono-font" style={{ fontSize: "var(--fs-2xl)", fontWeight: 600, color: "#D19A3D" }}>{show(totalSaved)}</div>
+            <div style={{ fontSize: "var(--fs-xs)", color: "var(--muted)" }}>{hideAmounts ? "goal hidden" : `of ${fmtMoney(totalTarget)} goal`}</div>
           </div>
         ) : (
           <div className="metric-card">
-            <div style={{ fontSize: 11, textTransform: "uppercase", color: "var(--muted)" }}>Net (30d)</div>
-            <div className="mono-font" style={{ fontSize: 22, fontWeight: 600 }}>{show(monthTotals.inc - monthTotals.exp)}</div>
+            <div style={{ fontSize: "var(--fs-xs)", textTransform: "uppercase", color: "var(--muted)" }}>Net (30d)</div>
+            <div className="mono-font" style={{ fontSize: "var(--fs-2xl)", fontWeight: 600 }}>{show(monthTotals.inc - monthTotals.exp)}</div>
           </div>
         )}
       </div>
 
-      <div className="paper-card torn-top p-4 mb-4">
-        <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--ink-soft)" }}>Accounts overview</h3>
+      <div className="paper-card p-4 mb-4">
+        <h3 style={{ fontSize: "var(--fs-md)", fontWeight: 700, marginBottom: "var(--sp-3)", color: "var(--ink-soft)" }}>Accounts overview</h3>
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
           {accountsWithBalance.map((a) => (
             <div key={a.id} style={{ borderLeft: `3px solid ${a.color}`, paddingLeft: 10 }}>
-              <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{a.name}</div>
-              <div className="mono-font" style={{ fontSize: 16, fontWeight: 600 }}>{hideAmounts ? MASK : fmtMoney(a.balance)}</div>
+              <div style={{ fontSize: "var(--fs-sm)", color: "var(--ink-soft)" }}>{a.name}</div>
+              <div className="mono-font" style={{ fontSize: "var(--fs-lg)", fontWeight: 600 }}>{hideAmounts ? MASK : fmtMoney(a.balance)}</div>
             </div>
           ))}
-          {accountsWithBalance.length === 0 && <p style={{ fontSize: 12, color: "var(--ink-soft)" }}>Add an account to get started.</p>}
+          {accountsWithBalance.length === 0 && <p style={{ fontSize: "var(--fs-sm)", color: "var(--ink-soft)" }}>Add an account to get started.</p>}
         </div>
       </div>
 
-      <div className="paper-card torn-top p-4 mb-4">
-        <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--ink-soft)" }}>Net worth trend — last 21 days</h3>
+      <div className="paper-card p-4 mb-4">
+        <h3 style={{ fontSize: "var(--fs-md)", fontWeight: 700, marginBottom: "var(--sp-3)", color: "var(--ink-soft)" }}>Net worth trend — last 21 days</h3>
         <ResponsiveContainer width="100%" height={220}>
           <AreaChart data={dailySeries}>
             <defs>
@@ -936,9 +938,9 @@ function DashboardView({
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(43,27,14,0.12)" />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6B4A2E" }} interval={2} />
-            <YAxis tick={{ fontSize: 11, fill: "#6B4A2E" }} width={70} tickFormatter={(v) => (hideAmounts ? "" : fmtMoney(v))} />
-            <Tooltip formatter={(v) => (hideAmounts ? MASK : fmtMoney(v))} contentStyle={{ fontSize: 12, borderRadius: 6 }} />
+            <XAxis dataKey="label" tick={{ fontSize: "var(--fs-xs)", fill: "#6B4A2E" }} interval={2} />
+            <YAxis tick={{ fontSize: "var(--fs-xs)", fill: "#6B4A2E" }} width={70} tickFormatter={(v) => (hideAmounts ? "" : fmtMoney(v))} />
+            <Tooltip formatter={(v) => (hideAmounts ? MASK : fmtMoney(v))} contentStyle={{ fontSize: "var(--fs-sm)", borderRadius: 6 }} />
             <Area type="monotone" dataKey="Net worth" stroke="#5C7A52" fill="url(#nw)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
@@ -946,14 +948,14 @@ function DashboardView({
 
       <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
         <div className="paper-card p-4">
-          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--ink-soft)" }}>Income vs expense — daily</h3>
+          <h3 style={{ fontSize: "var(--fs-md)", fontWeight: 700, marginBottom: "var(--sp-3)", color: "var(--ink-soft)" }}>Income vs expense — daily</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailySeries}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(43,27,14,0.12)" />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#6B4A2E" }} interval={3} />
-              <YAxis tick={{ fontSize: 10, fill: "#6B4A2E" }} width={60} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
-              <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 6 }} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <XAxis dataKey="label" tick={{ fontSize: "var(--fs-xs)", fill: "#6B4A2E" }} interval={3} />
+              <YAxis tick={{ fontSize: "var(--fs-xs)", fill: "#6B4A2E" }} width={60} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
+              <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: "var(--fs-sm)", borderRadius: 6 }} />
+              <Legend wrapperStyle={{ fontSize: "var(--fs-sm)" }} />
               <Bar dataKey="Income" fill="#5C7A52" radius={[3, 3, 0, 0]} />
               <Bar dataKey="Expense" fill="#A13A1F" radius={[3, 3, 0, 0]} />
             </BarChart>
@@ -961,17 +963,17 @@ function DashboardView({
         </div>
 
         <div className="paper-card p-4">
-          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--ink-soft)" }}>Spending by category — this month</h3>
+          <h3 style={{ fontSize: "var(--fs-md)", fontWeight: 700, marginBottom: "var(--sp-3)", color: "var(--ink-soft)" }}>Spending by category — this month</h3>
           {categoryBreakdown.length === 0 ? (
-            <p style={{ fontSize: 13, color: "var(--ink-soft)" }}>No expenses logged this month yet.</p>
+            <p style={{ fontSize: "var(--fs-base)", color: "var(--ink-soft)" }}>No expenses logged this month yet.</p>
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
                 <Pie data={categoryBreakdown} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={2}>
                   {categoryBreakdown.map((c, i) => <Cell key={i} fill={c.color} />)}
                 </Pie>
-                <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: 12, borderRadius: 6 }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} layout="vertical" verticalAlign="middle" align="right" />
+                <Tooltip formatter={(v) => fmtMoney(v)} contentStyle={{ fontSize: "var(--fs-sm)", borderRadius: 6 }} />
+                <Legend wrapperStyle={{ fontSize: "var(--fs-xs)" }} layout="vertical" verticalAlign="middle" align="right" />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -980,11 +982,11 @@ function DashboardView({
 
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
         <div className="paper-card p-4">
-          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--ink-soft)" }}>Budgets — live</h3>
+          <h3 style={{ fontSize: "var(--fs-md)", fontWeight: 700, marginBottom: "var(--sp-3)", color: "var(--ink-soft)" }}>Budgets — live</h3>
           <div className="flex flex-col gap-3">
             {budgetProgress.map((b) => (
               <div key={b.id}>
-                <div className="flex justify-between mb-1" style={{ fontSize: 12 }}>
+                <div className="flex justify-between mb-1" style={{ fontSize: "var(--fs-sm)" }}>
                   <span style={{ fontWeight: 600 }}>{b.name}</span>
                   <span className="mono-font" style={{ color: "var(--ink-soft)" }}>{fmtMoney(b.spent)} / {fmtMoney(b.amount)}</span>
                 </div>
@@ -993,18 +995,18 @@ function DashboardView({
                 </div>
               </div>
             ))}
-            {budgetProgress.length === 0 && <p style={{ fontSize: 12, color: "var(--ink-soft)" }}>No budgets set yet.</p>}
+            {budgetProgress.length === 0 && <p style={{ fontSize: "var(--fs-sm)", color: "var(--ink-soft)" }}>No budgets set yet.</p>}
           </div>
         </div>
 
         <div className="paper-card p-4">
-          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 6, color: "var(--ink-soft)" }}>Recent activity</h3>
-          <p style={{ fontSize: 10, color: "var(--ink-soft)", marginBottom: 4, opacity: 0.8 }}>Tap an entry to edit it</p>
+          <h3 style={{ fontSize: "var(--fs-md)", fontWeight: 700, marginBottom: 6, color: "var(--ink-soft)" }}>Recent activity</h3>
+          <p style={{ fontSize: "var(--fs-xs)", color: "var(--ink-soft)", marginBottom: 4, opacity: 0.8 }}>Tap an entry to edit it</p>
           <div>
             {sortedTransactions.slice(0, 6).map((t) => (
               <ReceiptRow key={t.id} t={t} accountName={accountName} categoryName={categoryName} categoryIcon={categoryIcon} onClick={onEditTxn} />
             ))}
-            {sortedTransactions.length === 0 && <p style={{ fontSize: 12, color: "var(--ink-soft)" }}>Nothing logged yet.</p>}
+            {sortedTransactions.length === 0 && <p style={{ fontSize: "var(--fs-sm)", color: "var(--ink-soft)" }}>Nothing logged yet.</p>}
           </div>
         </div>
       </div>
@@ -1017,18 +1019,19 @@ function ReceiptRow({ t, accountName, categoryName, categoryIcon, onClick }) {
   const isInc = t.type === "income";
   const isAdj = t.isAdjustment;
   const sign = isExp ? "−" : isInc ? "+" : "";
-  const color = isExp ? "var(--rust-800)" : isInc ? "var(--forest-800)" : "var(--slate-800)";
+  const textColor = isExp ? "var(--rust-800)" : isInc ? "var(--forest-800)" : "var(--slate-800)";
+  const tickColor = isAdj ? "var(--slate)" : isExp ? "var(--rust)" : isInc ? "var(--forest)" : "var(--slate)";
   const label = isExp || isInc ? categoryName(t.categoryId) : `${accountName(t.fromAccountId)} → ${accountName(t.toAccountId)}`;
   return (
-    <div className={`receipt-row ${onClick ? "receipt-row-click" : ""}`} onClick={onClick ? () => onClick(t) : undefined}>
-      <IconCircle bg={isAdj ? "var(--slate-100)" : isExp ? "var(--rust-100)" : isInc ? "var(--forest-100)" : "var(--slate-100)"} fg={color}>
-        {isAdj ? <Scale size={16} /> : isExp ? <CategoryIcon name={categoryIcon(t.categoryId)} size={17} /> : isInc ? <ArrowUpCircle size={17} /> : <ArrowLeftRight size={16} />}
-      </IconCircle>
-      <div className="flex-1 min-w-0">
-        <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.note || label}</div>
-        <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{isAdj ? "Balance adjustment" : label} · {fmtDate(t.date)} {fmtTime(t.date)}</div>
+    <div className={`ledger-line ${onClick ? "clickable" : ""}`} onClick={onClick ? () => onClick(t) : undefined}>
+      <div className="ledger-tick" style={{ background: tickColor }} />
+      <div className="ledger-body">
+        <div className="ledger-top">
+          <span className="ledger-title2">{t.note || label}</span>
+          <span className="ledger-amt" style={{ color: textColor }}>{sign}{fmtMoney(t.amount)}</span>
+        </div>
+        <div className="ledger-sub">{isAdj ? "Balance adjustment" : label} · {fmtDate(t.date)} {fmtTime(t.date)}</div>
       </div>
-      <div className="mono-font" style={{ fontSize: 14, fontWeight: 600, color }}>{sign}{fmtMoney(t.amount)}</div>
     </div>
   );
 }
@@ -1073,45 +1076,89 @@ function TransactionsView({ transactions, accountName, categoryName, categoryCol
         </select>
       </div>
 
-      <div className="paper-card torn-top">
-        {filtered.length === 0 && <p style={{ padding: 20, fontSize: 13, color: "var(--ink-soft)" }}>Nothing matches yet.</p>}
-        <div style={{ padding: "4px 14px" }}>
+      <div className="paper-card">
+        {filtered.length === 0 && <p style={{ padding: 20, fontSize: "var(--fs-base)", color: "var(--ink-soft)" }}>Nothing matches yet.</p>}
+
+        {/* Mobile: condensed ledger lines */}
+        <div className="ledger-mobile-wrap" style={{ padding: "4px 10px" }}>
           {filtered.map((t) => {
             const isExp = t.type === "expense";
             const isInc = t.type === "income";
             const isAdj = t.isAdjustment;
             const sign = isExp ? "−" : isInc ? "+" : "";
-            const color = isExp ? "var(--rust-800)" : isInc ? "var(--forest-800)" : "var(--slate-800)";
+            const textColor = isExp ? "var(--rust-800)" : isInc ? "var(--forest-800)" : "var(--slate-800)";
+            const tickColor = isAdj ? "var(--slate)" : isExp ? "var(--rust)" : isInc ? "var(--forest)" : "var(--slate)";
+            const label = isExp || isInc ? categoryName(t.categoryId) : `${accountName(t.fromAccountId)} → ${accountName(t.toAccountId)}`;
             return (
-              <div key={t.id} className="receipt-row">
-                <IconCircle bg={isAdj ? "var(--slate-100)" : isExp ? "var(--rust-100)" : isInc ? "var(--forest-100)" : "var(--slate-100)"} fg={color}>
-                  {isAdj ? <Scale size={16} /> : isExp ? <CategoryIcon name={categoryIcon(t.categoryId)} size={17} /> : isInc ? <ArrowUpCircle size={17} /> : <ArrowLeftRight size={16} />}
-                </IconCircle>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{t.note || "(no note)"}</span>
-                    <TypePill type={t.type} />
-                    {isAdj && <span className="stamp">Reconciled</span>}
-                    {(isExp || isInc) && !isAdj && (
-                      <span className="tag-chip" style={{ background: `${categoryColor(t.categoryId)}22`, color: categoryColor(t.categoryId) }}>
-                        <CategoryIcon name={categoryIcon(t.categoryId)} size={10} />{categoryName(t.categoryId)}
-                      </span>
-                    )}
+              <div key={t.id} className="ledger-line clickable" onClick={() => onEdit(t)}>
+                <div className="ledger-tick" style={{ background: tickColor }} />
+                <div className="ledger-body">
+                  <div className="ledger-top">
+                    <span className="ledger-title2">{t.note || "(no note)"}</span>
+                    <span className="ledger-amt" style={{ color: textColor }}>{sign}{fmtMoney(t.amount)}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 2 }}>
-                    {isExp || isInc ? accountName(t.accountId) : `${accountName(t.fromAccountId)} → ${accountName(t.toAccountId)}`}
+                  <div className="ledger-sub">
+                    {isAdj ? "Adjustment" : isExp || isInc ? `${categoryName(t.categoryId)} · ${accountName(t.accountId)}` : `${accountName(t.fromAccountId)} → ${accountName(t.toAccountId)}`}
                     {t.type === "transfer" && t.fee?.enabled ? ` · fee ${fmtMoney(t.fee.amount)}` : ""}
                     {" · "}{fmtDate(t.date)} {fmtTime(t.date)}
                   </div>
                 </div>
-                <div className="mono-font" style={{ fontSize: 14, fontWeight: 600, color, whiteSpace: "nowrap" }}>{sign}{fmtMoney(t.amount)}</div>
-                <div className="flex gap-1">
-                  <button className="icon-btn" onClick={() => onEdit(t)} aria-label="Edit"><Pencil size={14} /></button>
-                  <button className="icon-btn" onClick={() => onDelete(t.id)} aria-label="Delete"><Trash2 size={14} /></button>
+                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                  <button className="icon-btn" onClick={() => onEdit(t)} aria-label="Edit"><Pencil size={13} /></button>
+                  <button className="icon-btn" onClick={() => onDelete(t.id)} aria-label="Delete"><Trash2 size={13} /></button>
                 </div>
               </div>
             );
           })}
+        </div>
+
+        {/* Desktop / tablet: full debit/credit register */}
+        <div className="ledger-table-wrap" style={{ padding: "8px 10px" }}>
+          <table className="ledger-reg">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th className="num">Debit</th>
+                <th className="num">Credit</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((t) => {
+                const isExp = t.type === "expense";
+                const isInc = t.type === "income";
+                const isAdj = t.isAdjustment;
+                const tickColor = isAdj ? "var(--slate)" : isExp ? "var(--rust)" : isInc ? "var(--forest)" : "var(--slate)";
+                const desc = isAdj ? "Balance adjustment" : isExp || isInc ? (t.note || categoryName(t.categoryId)) : `${accountName(t.fromAccountId)} → ${accountName(t.toAccountId)}`;
+                const meta = isAdj
+                  ? "Adjustment"
+                  : isExp || isInc
+                  ? `${categoryName(t.categoryId)} · ${accountName(t.accountId)}`
+                  : `Transfer · ${fmtMoney(t.amount)}${t.fee?.enabled ? ` · fee ${fmtMoney(t.fee.amount)}` : ""}`;
+                const debit = isExp ? t.amount : t.type === "transfer" && t.fee?.enabled ? t.fee.amount : null;
+                const credit = isInc ? t.amount : null;
+                return (
+                  <tr key={t.id} onClick={() => onEdit(t)}>
+                    <td className="col-date">{fmtDate(t.date).replace(`, ${new Date(t.date).getFullYear()}`, "")}<br />{fmtTime(t.date)}</td>
+                    <td className="col-desc">
+                      <span className="cat-tick" style={{ background: tickColor }} />
+                      {desc}
+                      <span className="meta">{meta}</span>
+                    </td>
+                    <td className="col-num" style={{ color: "var(--rust-800)" }}>{debit != null ? fmtMoney(debit) : ""}</td>
+                    <td className="col-num" style={{ color: "var(--forest-800)" }}>{credit != null ? fmtMoney(credit) : ""}</td>
+                    <td onClick={(e) => e.stopPropagation()} style={{ paddingTop: 9 }}>
+                      <div className="flex gap-1" style={{ justifyContent: "flex-end" }}>
+                        <button className="icon-btn" onClick={() => onEdit(t)} aria-label="Edit"><Pencil size={13} /></button>
+                        <button className="icon-btn" onClick={() => onDelete(t.id)} aria-label="Delete"><Trash2 size={13} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1129,17 +1176,17 @@ function AccountsView({ accounts, onNew, onEdit, onDelete, onAdjust, netWorth })
         <SectionTitle>Accounts</SectionTitle>
         <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> New account</button>
       </div>
-      <div className="paper-card torn-top p-4 mb-4">
-        <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>Total net worth across all accounts</div>
-        <div className="display-font mono-font" style={{ fontSize: 28, fontWeight: 700 }}>{fmtMoney(netWorth)}</div>
+      <div className="paper-card p-4 mb-4">
+        <div style={{ fontSize: "var(--fs-sm)", color: "var(--ink-soft)" }}>Total net worth across all accounts</div>
+        <div className="display-font mono-font" style={{ fontSize: "var(--fs-3xl)", fontWeight: 700 }}>{fmtMoney(netWorth)}</div>
       </div>
       <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
         {accounts.map((a) => (
           <div key={a.id} className="paper-card p-4" style={{ borderTop: `4px solid ${a.color}` }}>
             <div className="flex items-start justify-between">
               <div>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>{a.name}</div>
-                <div style={{ fontSize: 11, color: "var(--ink-soft)", textTransform: "capitalize" }}>{a.type}</div>
+                <div style={{ fontSize: "var(--fs-md)", fontWeight: 700 }}>{a.name}</div>
+                <div style={{ fontSize: "var(--fs-xs)", color: "var(--ink-soft)", textTransform: "capitalize" }}>{a.type}</div>
               </div>
               <div className="flex gap-1">
                 <button className="icon-btn" onClick={() => onAdjust(a)} aria-label="Adjust balance" title="Adjust balance"><Scale size={14} /></button>
@@ -1147,11 +1194,11 @@ function AccountsView({ accounts, onNew, onEdit, onDelete, onAdjust, netWorth })
                 <button className="icon-btn" onClick={() => onDelete(a.id)} aria-label="Delete"><Trash2 size={14} /></button>
               </div>
             </div>
-            <div className="mono-font" style={{ fontSize: 22, fontWeight: 600, marginTop: 10 }}>{fmtMoney(a.balance)}</div>
-            <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 2 }}>Opening balance {fmtMoney(a.initialBalance)}</div>
+            <div className="mono-font" style={{ fontSize: "var(--fs-2xl)", fontWeight: 600, marginTop: 10 }}>{fmtMoney(a.balance)}</div>
+            <div style={{ fontSize: "var(--fs-xs)", color: "var(--ink-soft)", marginTop: 2 }}>Opening balance {fmtMoney(a.initialBalance)}</div>
           </div>
         ))}
-        {accounts.length === 0 && <p style={{ fontSize: 13, color: "var(--muted-strong)" }}>No accounts yet — create your first one.</p>}
+        {accounts.length === 0 && <p style={{ fontSize: "var(--fs-base)", color: "var(--muted-strong)" }}>No accounts yet — create your first one.</p>}
       </div>
     </div>
   );
@@ -1167,8 +1214,8 @@ function CategoriesView({ categories, transactions, onNew, onEdit, onDelete }) {
   const incomeCats = categories.filter((c) => c.type === "income");
 
   const Group = ({ title, list }) => (
-    <div className="paper-card torn-top p-4 mb-4">
-      <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--ink-soft)" }}>{title}</h3>
+    <div className="paper-card p-4 mb-4">
+      <h3 style={{ fontSize: "var(--fs-md)", fontWeight: 700, marginBottom: "var(--sp-3)", color: "var(--ink-soft)" }}>{title}</h3>
       <div className="flex flex-col gap-2">
         {list.map((c) => (
           <div key={c.id} className="flex items-center justify-between" style={{ padding: "6px 0", borderBottom: "1px dashed rgba(43,27,14,0.2)" }}>
@@ -1176,8 +1223,8 @@ function CategoriesView({ categories, transactions, onNew, onEdit, onDelete }) {
               <span className="flex items-center justify-center rounded-full" style={{ width: 24, height: 24, background: `${c.color}22`, color: c.color }}>
                 <CategoryIcon name={c.icon} size={13} />
               </span>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</span>
-              <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>{usageCount(c.id)} entries</span>
+              <span style={{ fontSize: "var(--fs-base)", fontWeight: 600 }}>{c.name}</span>
+              <span style={{ fontSize: "var(--fs-xs)", color: "var(--ink-soft)" }}>{usageCount(c.id)} entries</span>
             </div>
             <div className="flex gap-1">
               <button className="icon-btn" onClick={() => onEdit(c)} aria-label="Edit"><Pencil size={14} /></button>
@@ -1185,7 +1232,7 @@ function CategoriesView({ categories, transactions, onNew, onEdit, onDelete }) {
             </div>
           </div>
         ))}
-        {list.length === 0 && <p style={{ fontSize: 12, color: "var(--ink-soft)" }}>No categories yet.</p>}
+        {list.length === 0 && <p style={{ fontSize: "var(--fs-sm)", color: "var(--ink-soft)" }}>No categories yet.</p>}
       </div>
     </div>
   );
@@ -1218,8 +1265,8 @@ function BudgetsView({ budgetProgress, categoryName, onNew, onEdit, onDelete }) 
           <div key={b.id} className="paper-card p-4">
             <div className="flex items-start justify-between mb-2">
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>{b.name}</div>
-                <div style={{ fontSize: 11, color: "var(--ink-soft)", textTransform: "capitalize" }}>{b.period} · {categoryName(b.categoryId)}</div>
+                <div style={{ fontSize: "var(--fs-md)", fontWeight: 700 }}>{b.name}</div>
+                <div style={{ fontSize: "var(--fs-xs)", color: "var(--ink-soft)", textTransform: "capitalize" }}>{b.period} · {categoryName(b.categoryId)}</div>
               </div>
               <div className="flex gap-1">
                 <button className="icon-btn" onClick={() => onEdit(b)} aria-label="Edit"><Pencil size={14} /></button>
@@ -1229,13 +1276,13 @@ function BudgetsView({ budgetProgress, categoryName, onNew, onEdit, onDelete }) 
             <div className="progress-track">
               <div className="progress-fill" style={{ width: `${b.pct}%`, background: b.pct >= 100 ? "var(--rust)" : b.pct >= 80 ? "var(--brass)" : "var(--forest)" }} />
             </div>
-            <div className="flex justify-between mt-2 mono-font" style={{ fontSize: 12 }}>
+            <div className="flex justify-between mt-2 mono-font" style={{ fontSize: "var(--fs-sm)" }}>
               <span>{fmtMoney(b.spent)} spent</span>
               <span style={{ color: "var(--ink-soft)" }}>of {fmtMoney(b.amount)}</span>
             </div>
           </div>
         ))}
-        {budgetProgress.length === 0 && <p style={{ fontSize: 13, color: "var(--muted-strong)" }}>No budgets set yet.</p>}
+        {budgetProgress.length === 0 && <p style={{ fontSize: "var(--fs-base)", color: "var(--muted-strong)" }}>No budgets set yet.</p>}
       </div>
     </div>
   );
@@ -1262,8 +1309,8 @@ function SavingsView({ goalsWithProgress, accountName, onNew, onEdit, onDelete, 
             )}
             <div className="flex items-start justify-between mb-2">
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>{g.name}</div>
-                <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>
+                <div style={{ fontSize: "var(--fs-md)", fontWeight: 700 }}>{g.name}</div>
+                <div style={{ fontSize: "var(--fs-xs)", color: "var(--ink-soft)" }}>
                   {g.accountId ? `Linked to ${accountName(g.accountId)}` : "Tracked manually"}
                   {g.targetDate ? ` · by ${fmtDate(g.targetDate)}` : ""}
                 </div>
@@ -1276,7 +1323,7 @@ function SavingsView({ goalsWithProgress, accountName, onNew, onEdit, onDelete, 
             <div className="progress-track">
               <div className="progress-fill" style={{ width: `${g.pct}%`, background: g.pct >= 100 ? "var(--forest)" : "var(--brass)" }} />
             </div>
-            <div className="flex justify-between mt-2 mono-font" style={{ fontSize: 12 }}>
+            <div className="flex justify-between mt-2 mono-font" style={{ fontSize: "var(--fs-sm)" }}>
               <span>{fmtMoney(g.saved)} saved</span>
               <span style={{ color: "var(--ink-soft)" }}>of {fmtMoney(g.targetAmount)}</span>
             </div>
@@ -1288,7 +1335,7 @@ function SavingsView({ goalsWithProgress, accountName, onNew, onEdit, onDelete, 
           </div>
         ))}
         {goalsWithProgress.length === 0 && (
-          <p style={{ fontSize: 13, color: "var(--muted-strong)" }}>
+          <p style={{ fontSize: "var(--fs-base)", color: "var(--muted-strong)" }}>
             No savings goals yet. Create one — link it to a dedicated account for automatic tracking, or track it manually.
           </p>
         )}
@@ -1318,8 +1365,8 @@ function DebtsView({ debtProgress, onNew, onEdit, onDelete, onLogPayment }) {
             )}
             <div className="flex items-start justify-between mb-2">
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>{d.name}</div>
-                <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>
+                <div style={{ fontSize: "var(--fs-md)", fontWeight: 700 }}>{d.name}</div>
+                <div style={{ fontSize: "var(--fs-xs)", color: "var(--ink-soft)" }}>
                   {d.remaining <= 0 ? "Paid off" : "Owed"}{d.dueDate ? ` · due ${fmtDate(d.dueDate)}` : ""}
                 </div>
               </div>
@@ -1331,11 +1378,11 @@ function DebtsView({ debtProgress, onNew, onEdit, onDelete, onLogPayment }) {
             <div className="progress-track">
               <div className="progress-fill" style={{ width: `${d.pct}%`, background: d.pct >= 100 ? "var(--forest)" : "var(--rust)" }} />
             </div>
-            <div className="flex justify-between mt-2 mono-font" style={{ fontSize: 12 }}>
+            <div className="flex justify-between mt-2 mono-font" style={{ fontSize: "var(--fs-sm)" }}>
               <span>{fmtMoney(d.paid)} paid</span>
               <span style={{ color: "var(--ink-soft)" }}>of {fmtMoney(d.totalAmount)}</span>
             </div>
-            <div className="mono-font" style={{ fontSize: 16, fontWeight: 700, marginTop: 6, color: d.remaining <= 0 ? "var(--forest-800)" : "var(--rust-800)" }}>
+            <div className="mono-font" style={{ fontSize: "var(--fs-lg)", fontWeight: 700, marginTop: 6, color: d.remaining <= 0 ? "var(--forest-800)" : "var(--rust-800)" }}>
               {fmtMoney(d.remaining)} remaining
             </div>
             {d.remaining > 0 && (
@@ -1346,7 +1393,7 @@ function DebtsView({ debtProgress, onNew, onEdit, onDelete, onLogPayment }) {
           </div>
         ))}
         {debtProgress.length === 0 && (
-          <p style={{ fontSize: 13, color: "var(--muted-strong)" }}>
+          <p style={{ fontSize: "var(--fs-base)", color: "var(--muted-strong)" }}>
             No debts tracked yet. Add one, then log payments against it — each payment automatically deducts from what's left.
           </p>
         )}
@@ -1407,7 +1454,7 @@ function TransactionForm({ initial, accounts, categories, budgets, debts, onCanc
     <Modal title={isAdjustment ? "Edit balance adjustment" : isEditing ? "Edit entry" : "Log a new entry"} onClose={onCancel}>
       <form onSubmit={submit}>
         {isAdjustment && (
-          <p style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+          <p style={{ fontSize: "var(--fs-sm)", color: "var(--ink-soft)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
             <Scale size={13} /> This entry reconciles your logged balance with a real-world amount.
           </p>
         )}
@@ -1459,7 +1506,7 @@ function TransactionForm({ initial, accounts, categories, budgets, debts, onCanc
                       <option value="">Not a debt payment</option>
                       {debts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </select>
-                    {debtId && <p style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: -6 }}>This amount will be deducted from that debt's remaining balance.</p>}
+                    {debtId && <p style={{ fontSize: "var(--fs-xs)", color: "var(--ink-soft)", marginTop: -6 }}>This amount will be deducted from that debt's remaining balance.</p>}
                   </Field>
                 )}
               </>
@@ -1479,7 +1526,7 @@ function TransactionForm({ initial, accounts, categories, budgets, debts, onCanc
                 </select>
               </Field>
             </div>
-            {fromAccountId === toAccountId && <p style={{ fontSize: 12, color: "var(--rust)", marginTop: -8, marginBottom: 8 }}>Pick two different accounts.</p>}
+            {fromAccountId === toAccountId && <p style={{ fontSize: "var(--fs-sm)", color: "var(--rust)", marginTop: -8, marginBottom: 8 }}>Pick two different accounts.</p>}
             <Field label="Transfer fee">
               <div className="flex items-center gap-3">
                 <button
@@ -1489,7 +1536,7 @@ function TransactionForm({ initial, accounts, categories, budgets, debts, onCanc
                 >
                   {feeEnabled ? <Check size={14} /> : <X size={14} />}
                 </button>
-                <span style={{ fontSize: 13 }}>{feeEnabled ? "This transfer has a fee" : "No fee for this transfer"}</span>
+                <span style={{ fontSize: "var(--fs-base)" }}>{feeEnabled ? "This transfer has a fee" : "No fee for this transfer"}</span>
               </div>
               {feeEnabled && <AmountInput value={feeAmount} onChange={setFeeAmount} placeholder="Fee amount" />}
             </Field>
@@ -1745,7 +1792,7 @@ function DebtForm({ initial, onCancel, onSave }) {
             ))}
           </div>
         </Field>
-        <p style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 4 }}>
+        <p style={{ fontSize: "var(--fs-sm)", color: "var(--ink-soft)", marginBottom: 4 }}>
           Once created, log payments against this debt from the Debts tab (or by picking it in the
           "Apply to a debt" field when logging any expense) — each payment automatically reduces
           what's left.
@@ -1777,7 +1824,7 @@ function ContributeForm({ goal, onCancel, onSave }) {
     <Modal title={`Update "${goal.name}"`} onClose={onCancel}>
       <form onSubmit={submit}>
         <Field label="Currently saved">
-          <p className="mono-font" style={{ fontSize: 16, fontWeight: 600 }}>{fmtMoney(goal.manualSaved || 0)}</p>
+          <p className="mono-font" style={{ fontSize: "var(--fs-lg)", fontWeight: 600 }}>{fmtMoney(goal.manualSaved || 0)}</p>
         </Field>
         <Field label="Action">
           <div className="flex gap-2">
@@ -1813,19 +1860,19 @@ function AdjustBalanceForm({ account, currentBalance, onCancel, onSave }) {
   return (
     <Modal title={`Adjust "${account.name}"`} onClose={onCancel}>
       <form onSubmit={submit}>
-        <p style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>
+        <p style={{ fontSize: "var(--fs-sm)", color: "var(--ink-soft)", marginBottom: 12 }}>
           Use this when your logged balance doesn't match what your bank or wallet actually shows —
           for example, if you forgot to log something. It creates a dated adjustment entry so your
           history stays traceable, instead of silently editing the past.
         </p>
         <Field label="Currently tracked balance">
-          <p className="mono-font" style={{ fontSize: 16, fontWeight: 600 }}>{fmtMoney(currentBalance)}</p>
+          <p className="mono-font" style={{ fontSize: "var(--fs-lg)", fontWeight: 600 }}>{fmtMoney(currentBalance)}</p>
         </Field>
         <Field label="Actual balance right now">
           <AmountInput value={actual} onChange={setActual} required />
         </Field>
         {meaningfulDiff && (
-          <p style={{ fontSize: 12, color: diff > 0 ? "var(--forest)" : "var(--rust)", marginTop: -8, marginBottom: 10 }}>
+          <p style={{ fontSize: "var(--fs-sm)", color: diff > 0 ? "var(--forest)" : "var(--rust)", marginTop: -8, marginBottom: "var(--sp-3)" }}>
             This will log {diff > 0 ? "an income" : "an expense"} adjustment of {fmtMoney(Math.abs(diff))}.
           </p>
         )}
